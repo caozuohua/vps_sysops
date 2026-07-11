@@ -1,0 +1,7 @@
+[Unit]
+Description=Sync Fail2Ban banned IPs to UFW (run on demand)
+After=network.target fail2ban.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/caozuohua/vps_sysops/scripts/sync_fail2ban_to_ufw.sh

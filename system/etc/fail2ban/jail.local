@@ -1,0 +1,31 @@
+# VPS 暴力破解加固 — Fail2Ban 配置（2026-07-11）
+# banaction 用极简 ufw-simple（绕开 nftables action 模板在本环境解析失败的问题）
+[DEFAULT]
+banaction = ufw-simple
+banaction_allports = ufw-simple
+
+bantime = 1h
+bantime.increment = true
+bantime.factor = 2
+bantime.maxtime = 1w
+bantime.rndtime = 0
+
+findtime = 10m
+maxretry = 3
+maxmatches = 5
+backend = systemd
+
+[sshd]
+enabled = true
+port = ssh
+logpath = /var/log/auth.log
+maxretry = 3
+bantime = 1h
+
+[recidive]
+enabled = true
+logpath = /var/log/fail2ban.log
+banaction = ufw-simple
+bantime = 1w
+findtime = 1w
+maxretry = 5

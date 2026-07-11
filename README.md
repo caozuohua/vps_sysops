@@ -156,6 +156,51 @@ systemctl status failsync.timer
 
 > 当前已封禁的暴破 IP 见 `sudo ufw status`（标记 `bruteforce-` 为手动补封、`f2b-auto` 为同步脚本自动维护）。
 
+## 系统层配置（纳入版本管理）
+
+部分加固配置位于 `/etc` 与 systemd 下，**不在 `scripts/` 内**。为可复现部署，已全部复制到
+项目 `system/` 目录（保持原绝对路径结构），与代码一同版本化：
+
+```
+system/
+├── etc/
+│   ├── fail2ban/
+│   │   ├── jail.local              # fail2ban 加强配置（maxretry/bantime/recidive）
+│   │   └── action.d/
+│   │       └── ufw-simple.conf     # 极简 UFW action（绕开失效的 nftables action）
+│   ├── ssh/
+│   │   └── sshd_config.d/
+│   │       └── 99-bruteforce.conf  # sshd MaxAuthTries=3
+│   └── systemd/
+│       └── system/
+│           ├── failsync.service    # 触发 sync_fail2ban_to_ufw.sh
+│           └── failsync.timer      # 每 30s 触发
+```
+
+### 部署到新机器 / 重装后恢复
+
+```bash
+# 1. fail2ban 配置
+sudo cp system/etc/fail2ban/jail.local /etc/fail2ban/jail.local
+sudo cp system/etc/fail2ban/action.d/ufw-simple.conf /etc/fail2ban/action.d/ufw-simple.conf
+sudo fail2ban-client reload
+
+# 2. sshd 加固（仅降 MaxAuthTries，不改端口/密码）
+sudo cp system/etc/ssh/sshd_config.d/99-bruteforce.conf /etc/ssh/sshd_config.d/
+sudo sshd -t && sudo systemctl restart ssh
+
+# 3. UFW 同步守护（注意：failsync.service 里 ExecStart 路径需改成实际项目位置）
+sudo cp system/etc/systemd/system/failsync.service /etc/systemd/system/
+sudo cp system/etc/systemd/system/failsync.timer  /etc/systemd/system/
+sudo sed -i "s#/home/caozuohua/vps_sysops#/实际/项目/路径#g" /etc/systemd/system/failsync.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now failsync.timer
+```
+
+> **注意**：`failsync.service` 的 `ExecStart` 写死了本项目在本机的绝对路径
+> （`/home/caozuohua/vps_sysops/scripts/sync_fail2ban_to_ufw.sh`）。部署到其他机器时
+> 必须用 `sed` 改成实际路径，否则 timer 触发会找不到脚本。
+
 ## 定时任务建议
 
 健康检查每 5 分钟、备份每天凌晨、全量报告每小时：
