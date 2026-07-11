@@ -6,6 +6,24 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/ops.conf"
 
+# 用法说明（bash scripts/03_monitor.sh [-h|--help]）
+usage() {
+  cat <<EOF
+用法: sudo bash scripts/03_monitor.sh
+
+系统监控/健康检查，可加入 cron 定时执行
+
+选项:
+  -h, --help   显示本帮助并退出
+EOF
+}
+
+# 参数解析：仅支持 -h/--help
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
 HOSTNAME_STR=$(hostname)
 ALERTS=()
 
@@ -30,9 +48,17 @@ if (( DISK_PCT > DISK_THRESHOLD )); then
 fi
 
 # systemd 服务存活检查
+# Hermes 网关（hermes-gateway.service）是「用户级」systemd 服务（hermes gateway install
+# 注册在 ~/.config/systemd/user/），需用 systemctl --user 检测；普通系统服务走 systemctl。
+# 这里先查系统级，未运行再回退用户级，兼顾两种情况。
 for svc in ${MONITOR_SERVICES}; do
-  if ! systemctl is-active --quiet "${svc}"; then
-    ALERTS+=("服务异常: ${svc} 未运行")
+  svc_name="${svc%.service}"
+  if systemctl is-active --quiet "${svc_name}.service" 2>/dev/null; then
+    : # 系统级运行中
+  elif systemctl --user is-active --quiet "${svc_name}.service" 2>/dev/null; then
+    : # 用户级运行中
+  else
+    ALERTS+=("服务异常: ${svc} 未运行（system / user 均未激活）")
   fi
 done
 

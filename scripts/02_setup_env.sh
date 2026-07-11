@@ -25,6 +25,24 @@ if ! command -v docker &>/dev/null; then
     "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
     $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
     tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# 用法说明（bash scripts/02_setup_env.sh [-h|--help]）
+usage() {
+  cat <<EOF
+用法: sudo bash scripts/02_setup_env.sh
+
+部署运行环境: Docker / Python / Node.js / 常用工具
+
+选项:
+  -h, --help   显示本帮助并退出
+EOF
+}
+
+# 参数解析：仅支持 -h/--help
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
   apt-get update -y
   apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   systemctl enable docker

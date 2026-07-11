@@ -6,6 +6,24 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/ops.conf"
 
+# 用法说明（bash scripts/04_backup.sh [-h|--help]）
+usage() {
+  cat <<EOF
+用法: sudo bash scripts/04_backup.sh
+
+备份指定目录 + 配置日志轮转，可加入 cron 定时执行
+
+选项:
+  -h, --help   显示本帮助并退出
+EOF
+}
+
+# 参数解析：仅支持 -h/--help
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
 mkdir -p "${BACKUP_DEST}"
 STAMP=$(date '+%Y%m%d_%H%M%S')
 ARCHIVE="${BACKUP_DEST}/backup_${STAMP}.tar.gz"

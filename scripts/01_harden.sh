@@ -5,6 +5,24 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/ops.conf"
+
+# 用法说明（bash scripts/01_harden.sh [-h|--help]）
+usage() {
+  cat <<EOF
+用法: sudo bash scripts/01_harden.sh
+
+基础安全加固
+
+选项:
+  -h, --help   显示本帮助并退出
+EOF
+}
+
+# 参数解析：仅支持 -h/--help
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
 LOG_FILE="/var/log/vps-ops-harden.log"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
