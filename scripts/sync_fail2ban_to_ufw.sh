@@ -35,6 +35,14 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
+if [[ $EUID -ne 0 ]]; then
+  echo "请使用 sudo 或 root 权限运行此脚本" >&2
+  exit 1
+fi
+
+exec 9>/run/lock/vps-sysops-failsync.lock
+flock -n 9 || exit 0
+
 UFW=/usr/sbin/ufw
 COMMENT="f2b-auto"
 JAILS="sshd recidive"
@@ -46,7 +54,7 @@ log() { echo "[$(date '+%F %T')] $*"; }
 # ─── 白名单（永不封禁）──────────────────────────────────────────────────────
 SELF_IP="$(curl -sf -m 5 https://ifconfig.me || true)"
 ADMIN_IPS="$(last -i -n 20 2>/dev/null | grep -vE 'reboot|wtmp|still' | awk '{print $3}' | grep -E '^[0-9.]+$' | sort -u || true)"
-ALLOWED_IPS="$(sudo "$UFW" status 2>/dev/null | grep -iE 'ALLOW' | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort -u || true)"
+ALLOWED_IPS="$("$UFW" status 2>/dev/null | grep -iE 'ALLOW' | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort -u || true)"
 
 is_whitelisted() {
   local ip="$1"
@@ -66,7 +74,7 @@ is_whitelisted() {
 # ─── 取 fail2ban 当前实际封禁的 IP（来自各 jail 的 Banned IP list）──────────
 BANNED_SET=""
 for j in $JAILS; do
-  ips="$(sudo fail2ban-client status "$j" 2>/dev/null | sed -n '/Banned IP list/,/^$/p' | grep -oE '([0-9a-fA-F:.]+)' | grep -E '^[0-9]' | sort -u)"
+  ips="$(fail2ban-client status "$j" 2>/dev/null | sed -n '/Banned IP list/,/^$/p' | grep -oE '([0-9a-fA-F:.]+)' | grep -E '^[0-9]' | sort -u)"
   BANNED_SET+=" $ips"
 done
 BANNED_SET="$(echo "$BANNED_SET" | tr ' ' '\n' | sort -u | grep -v '^$')"
@@ -76,10 +84,10 @@ added=0
 while IFS= read -r ip; do
   [[ -z "$ip" ]] && continue
   is_whitelisted "$ip" && { log "SKIP (whitelist): $ip"; continue; }
-  if sudo "$UFW" status 2>/dev/null | grep -q "$ip.*$COMMENT"; then
+  if "$UFW" status 2>/dev/null | grep -q "$ip.*$COMMENT"; then
     continue
   fi
-  if sudo "$UFW" deny from "$ip" to any comment "$COMMENT" >/dev/null 2>&1; then
+  if "$UFW" deny from "$ip" to any comment "$COMMENT" >/dev/null 2>&1; then
     log "DENY: $ip"
     added=$((added+1))
   else
@@ -88,14 +96,14 @@ while IFS= read -r ip; do
 done <<< "$BANNED_SET"
 
 # ─── 2. 清理：UFW 里 f2b-auto 规则但已不在 fail2ban 封禁列表的 IP ───────────
-mapfile -t UFW_F2B < <(sudo "$UFW" status numbered 2>/dev/null \
+mapfile -t UFW_F2B < <("$UFW" status numbered 2>/dev/null \
   | grep "$COMMENT" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort -u)
 
 removed=0
 for ip in "${UFW_F2B[@]:-}"; do
   [[ -z "$ip" ]] && continue
   if ! echo "$BANNED_SET" | grep -qx "$ip"; then
-    if sudo "$UFW" delete deny from "$ip" to any >/dev/null 2>&1; then
+    if "$UFW" delete deny from "$ip" to any >/dev/null 2>&1; then
       log "UNBAN (expired in f2b): $ip"
       removed=$((removed+1))
     fi

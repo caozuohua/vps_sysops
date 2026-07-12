@@ -55,7 +55,8 @@ for svc in ${MONITOR_SERVICES}; do
   svc_name="${svc%.service}"
   if systemctl is-active --quiet "${svc_name}.service" 2>/dev/null; then
     : # 系统级运行中
-  elif systemctl --user is-active --quiet "${svc_name}.service" 2>/dev/null; then
+  elif [[ -d "/run/user/$(id -u)" ]] && \
+       XDG_RUNTIME_DIR="/run/user/$(id -u)" systemctl --user is-active --quiet "${svc_name}.service" 2>/dev/null; then
     : # 用户级运行中
   else
     ALERTS+=("服务异常: ${svc} 未运行（system / user 均未激活）")

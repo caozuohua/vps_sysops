@@ -47,12 +47,21 @@ cmd_network() {
   echo -n "解析测试 (google.com): "
   dig +short google.com 2>/dev/null | head -1 || nslookup google.com 2>/dev/null | grep Address | tail -1 || echo "失败"
 
-  section "GCP 连接性测试"
-  local endpoints=("metadata.google.internal:80" "storage.googleapis.com:443" "compute.googleapis.com:443")
+  section "云平台与外网连接性"
+  local endpoints=("https://www.google.com" "https://www.cloudflare.com")
+  if curl -fsS --max-time 2 -H "Metadata-Flavor: Google" \
+      http://metadata.google.internal/computeMetadata/v1/instance/id >/dev/null 2>&1; then
+    endpoints+=("http://metadata.google.internal")
+    echo "检测到 GCP 元数据服务"
+  elif curl -fsS --max-time 2 -H "Metadata: true" \
+      "http://169.254.169.254/metadata/instance?api-version=2021-02-01" >/dev/null 2>&1; then
+    endpoints+=("http://169.254.169.254")
+    echo "检测到 Azure IMDS"
+  else
+    echo "未检测到 GCP/Azure 元数据服务，执行通用外网测试"
+  fi
   for ep in "${endpoints[@]}"; do
-    local host="${ep%%:*}"
-    local port="${ep##*:}"
-    if timeout 3 bash -c "echo >/dev/tcp/${host}/${port}" 2>/dev/null; then
+    if curl -fsS --max-time 5 -o /dev/null "$ep" 2>/dev/null; then
       echo -e "\e[32m✓\e[0m ${ep}"
     else
       echo -e "\e[31m✗\e[0m ${ep} (不可达)"

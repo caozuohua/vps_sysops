@@ -4,4 +4,4 @@ After=network.target fail2ban.service
 
 [Service]
 Type=oneshot
-ExecStart=/home/caozuohua/vps_sysops/scripts/sync_fail2ban_to_ufw.sh
+ExecStart=@PROJECT_ROOT@/scripts/sync_fail2ban_to_ufw.sh

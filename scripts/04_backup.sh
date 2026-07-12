@@ -24,12 +24,27 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
+if [[ $EUID -ne 0 ]]; then
+  echo "默认备份源包含 /etc 和 /home，请使用 root 权限运行" >&2
+  exit 1
+fi
+
 mkdir -p "${BACKUP_DEST}"
+
+read -r -a SOURCES <<< "${BACKUP_SOURCES}"
+for source in "${SOURCES[@]}"; do
+  [[ -e "$source" ]] || { echo "备份源不存在: $source" >&2; exit 1; }
+done
+
 STAMP=$(date '+%Y%m%d_%H%M%S')
 ARCHIVE="${BACKUP_DEST}/backup_${STAMP}.tar.gz"
 
 echo "备份目录: ${BACKUP_SOURCES}"
-tar -czf "${ARCHIVE}" ${BACKUP_SOURCES} 2>/tmp/vps-ops-backup-errors.log || true
+if ! tar -czf "${ARCHIVE}" -- "${SOURCES[@]}" 2>/tmp/vps-ops-backup-errors.log; then
+  rm -f "${ARCHIVE}"
+  echo "备份失败，详情见 /tmp/vps-ops-backup-errors.log" >&2
+  exit 1
+fi
 echo "已生成备份: ${ARCHIVE} ($(du -h "${ARCHIVE}" | cut -f1))"
 
 # 清理过期备份

@@ -189,24 +189,23 @@ sudo fail2ban-client reload
 sudo cp system/etc/ssh/sshd_config.d/99-bruteforce.conf /etc/ssh/sshd_config.d/
 sudo sshd -t && sudo systemctl restart ssh
 
-# 3. UFW 同步守护（注意：failsync.service 里 ExecStart 路径需改成实际项目位置）
+# 3. UFW 同步守护（推荐使用 01_harden.sh 自动安装）
 sudo cp system/etc/systemd/system/failsync.service /etc/systemd/system/
 sudo cp system/etc/systemd/system/failsync.timer  /etc/systemd/system/
-sudo sed -i "s#/home/caozuohua/vps_sysops#/实际/项目/路径#g" /etc/systemd/system/failsync.service
+# 手工部署时，将 @PROJECT_ROOT@ 替换为项目绝对路径
+sudo sed -i "s#@PROJECT_ROOT@#/实际/项目/路径#g" /etc/systemd/system/failsync.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now failsync.timer
 ```
 
-> **注意**：`failsync.service` 的 `ExecStart` 写死了本项目在本机的绝对路径
-> （`/home/caozuohua/vps_sysops/scripts/sync_fail2ban_to_ufw.sh`）。部署到其他机器时
-> 必须用 `sed` 改成实际路径，否则 timer 触发会找不到脚本。
+> `01_harden.sh` 会把同步脚本安装到 `/usr/local/libexec/`，因此正常安装流程不需要修改路径。
 
 ## 定时任务建议
 
 健康检查每 5 分钟、备份每天凌晨、全量报告每小时：
 
 ```bash
-crontab -e
+ sudo crontab -e
 ```
 
 ```cron

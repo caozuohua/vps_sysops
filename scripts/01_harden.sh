@@ -54,7 +54,14 @@ ufw --force enable
 ufw status verbose | tee -a "$LOG_FILE"
 
 log "配置 fail2ban（针对 sshd）..."
-cat > /etc/fail2ban/jail.local <<EOF
+SYSTEM_DIR="${SCRIPT_DIR}/../system/etc"
+if [[ -f "${SYSTEM_DIR}/fail2ban/jail.local" && -f "${SYSTEM_DIR}/fail2ban/action.d/ufw-simple.conf" ]]; then
+  install -D -m 0644 "${SYSTEM_DIR}/fail2ban/jail.local" /etc/fail2ban/jail.local
+  sed -i "s/^port = ssh$/port = ${SSH_PORT}/" /etc/fail2ban/jail.local
+  install -D -m 0644 "${SYSTEM_DIR}/fail2ban/action.d/ufw-simple.conf" \
+    /etc/fail2ban/action.d/ufw-simple.conf
+else
+  cat > /etc/fail2ban/jail.local <<EOF
 [sshd]
 enabled = true
 port = ${SSH_PORT}
@@ -62,8 +69,26 @@ maxretry = 5
 bantime = 3600
 findtime = 600
 EOF
+fi
 systemctl enable fail2ban
 systemctl restart fail2ban
+
+log "安装 SSH 与 Fail2Ban-UFW 同步配置..."
+install -D -m 0644 "${SYSTEM_DIR}/ssh/sshd_config.d/99-bruteforce.conf" \
+  /etc/ssh/sshd_config.d/99-bruteforce.conf
+sshd -t
+
+install -D -m 0755 "${SCRIPT_DIR}/sync_fail2ban_to_ufw.sh" \
+  /usr/local/libexec/vps-sysops-sync-fail2ban
+install -D -m 0644 "${SYSTEM_DIR}/systemd/system/failsync.service" \
+  /etc/systemd/system/failsync.service
+install -D -m 0644 "${SYSTEM_DIR}/systemd/system/failsync.timer" \
+  /etc/systemd/system/failsync.timer
+sed -i "s#@PROJECT_ROOT@/scripts/sync_fail2ban_to_ufw.sh#/usr/local/libexec/vps-sysops-sync-fail2ban#" \
+  /etc/systemd/system/failsync.service
+systemctl daemon-reload
+systemctl enable --now failsync.timer
+systemctl restart ssh
 
 log "启用自动安全更新 (unattended-upgrades) ..."
 dpkg-reconfigure -f noninteractive unattended-upgrades
