@@ -2,7 +2,7 @@
 
 一套面向 Ubuntu VPS 的生产级 Shell 运维工具包，按**模块化架构**组织：
 `ops.sh` 是统一交互入口，各功能拆到 `scripts/` 下独立、可单独调用的脚本，
-共享 `config/ops.conf` 一处配置。覆盖 **16 个功能模块** —— 从基础安全加固、
+共享 `config/ops.conf` 一处配置。覆盖 **17 个功能模块** —— 从基础安全加固、
 运行环境部署，到系统监控、进程/服务/日志/安全/网络/磁盘诊断、更新检查、配置备份、性能调优，
 再到全量报告一键生成。
 
@@ -27,6 +27,7 @@ vps_sysops/
 │   ├── 11_network.sh        # 网络诊断（路由/DNS/GCP 连通性/流量）
 │   ├── 12_disk.sh           # 磁盘与存储（使用率/inode/大文件/SMART）
 │   ├── 13_updates.sh        # 系统更新检查 & 安全补丁
+│   ├── 14_web_stack.sh      # x-ui/Nginx/Let’s Encrypt（GCP Ubuntu）
 │   ├── 15_tune.sh           # 性能调优建议
 │   └── 16_report.sh         # 全量报告（汇聚全部模块，输出到 REPORT_DIR）
 └── README.md               # 本文档
@@ -59,6 +60,7 @@ vps_sysops/
 | 14 | `15_tune.sh` | sysctl 参数检查 + 调优建议 | 否 |
 | 15 | `16_report.sh` | 全量报告输出到 `REPORT_DIR` | 部分 |
 | 16 | — | 交互式依次运行所有模块 | 部分 |
+| 17 | `14_web_stack.sh` | x-ui/Nginx/Let’s Encrypt Web 栈 | 是 |
 
 > 说明：模块编号沿用历史序号（06 在 07 前、13 后是 15、报告为 16），菜单已按 `scripts/` 实际文件名映射，新增脚本请勿重排既有编号。
 
@@ -200,6 +202,44 @@ sudo systemctl enable --now failsync.timer
 
 > `01_harden.sh` 会把同步脚本安装到 `/usr/local/libexec/`，因此正常安装流程不需要修改路径。
 
+## x-ui / Nginx / Let’s Encrypt（GCP Ubuntu）
+
+`scripts/14_web_stack.sh` 不负责安装来源不明的 x-ui 二进制；它假设 x-ui 已安装并监听本机端口，负责 Nginx 反代、HTTPS 证书和面板路径加固。
+
+先编辑 `config/ops.conf`：
+
+```conf
+XUI_DOMAIN="xui.example.com"
+XUI_PANEL_PORT=2053
+XUI_WEB_BASE_PATH="/xui_a1b2c3d4e5f6g7h8"
+XUI_DB_PATH="/etc/x-ui/x-ui.db"
+LETSENCRYPT_EMAIL="admin@example.com"
+```
+
+然后执行：
+
+```bash
+sudo bash scripts/14_web_stack.sh --install
+sudo bash scripts/14_web_stack.sh --xui-path /xui_a1b2c3d4e5f6g7h8
+sudo bash scripts/14_web_stack.sh --issue
+sudo bash scripts/14_web_stack.sh --status
+sudo bash scripts/14_web_stack.sh --renew --dry-run
+```
+
+模块会将 x-ui 只代理到 `127.0.0.1:${XUI_PANEL_PORT}`，根路径返回 404，面板路径通过 Nginx HTTPS 访问，并在修改 x-ui SQLite 数据库前自动生成备份。WebSocket 所需的 Upgrade/Connection 头也会转发。
+
+证书续期由 Certbot 自带定时机制负责；脚本的 `--renew` 用于手工验证或补充执行，续期成功后 reload Nginx。
+
+### GCP 必须额外配置
+
+Ubuntu 内的 UFW 放行不等于 GCP VPC 防火墙放行。请在 GCP 防火墙规则中仅对需要的来源开放 TCP 80/443；x-ui 面板端口（例如 2053）不应开放到公网。域名 DNS 的 A/AAAA 记录必须指向 VPS，Let’s Encrypt HTTP-01 验证需要公网 TCP 80 可达。
+
+### 安全边界
+
+- `XUI_WEB_BASE_PATH` 不是 x-ui 的 `secret` 字段；模块修改的是 `settings.webBasePath`。
+- 随机路径只是降低扫描噪声，不是认证机制；x-ui 自身密码仍必须使用强密码。
+- 脚本不会自动修改 GCP 防火墙、x-ui 管理员密码或第三方 DNS。
+- 申请证书前先确认域名已解析、80/443 未被其他服务占用，并先在快照或测试机验证。
 ## 定时任务建议
 
 健康检查每 5 分钟、备份每天凌晨、全量报告每小时：

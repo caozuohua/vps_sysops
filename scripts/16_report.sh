@@ -68,7 +68,8 @@ cmd_report() {
   run_module "磁盘与存储"     12_disk          no
   run_module "性能调优建议"   15_tune          no
   run_module "安全审计"       10_security_audit yes
-  run_module "系统更新检查"   13_updates       yes
+ run_module "系统更新检查"   13_updates       yes
+  run_module "Web 栈状态"      14_web_stack     yes
 
   echo ""
   log "✅ 全量报告已保存至: ${REPORT_FILE}"
