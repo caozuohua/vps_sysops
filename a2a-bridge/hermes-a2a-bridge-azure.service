@@ -1,0 +1,34 @@
+[Unit]
+Description=Private Hermes A2A Bridge
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/caozuohua/vps_sysops/a2a-bridge
+EnvironmentFile=/home/caozuohua/.config/hermes-a2a-bridge.env
+Environment=A2A_BIND=100.87.159.14
+Environment=A2A_PORT=8765
+Environment=A2A_AGENT_NAME=azure-hermesagent
+Environment=A2A_STATE_DIR=/home/caozuohua/vps_sysops/a2a-bridge/state
+Environment=A2A_PEERS=100.101.90.114
+Environment=A2A_ENABLE_TOOLS=false
+Environment=A2A_ALLOWED_TOOLSETS=
+Environment=A2A_HERMES_EXEC=/home/caozuohua/.hermes/hermes-agent/venv/bin/python
+Environment='A2A_HERMES_ARGS=["-m","hermes_cli.main","--safe-mode","-z"]'
+ExecStart=/usr/bin/python3 /home/caozuohua/vps_sysops/a2a-bridge/bridge.py
+Restart=always
+RestartSec=5
+MemoryHigh=400M
+MemoryMax=600M
+CPUQuota=80%
+TasksMax=64
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/caozuohua/.hermes /home/caozuohua/vps_sysops/a2a-bridge/state
+UMask=0077
+
+[Install]
+WantedBy=default.target
