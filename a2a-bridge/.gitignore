@@ -1,0 +1,10 @@
+# Runtime state and generated files
+state/
+__pycache__/
+*.py[cod]
+*.log
+
+# Local/editor noise
+.venv/
+.env
+*.swp
