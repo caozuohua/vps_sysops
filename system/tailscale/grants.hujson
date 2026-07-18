@@ -1,0 +1,17 @@
+// Tailnet least-privilege policy verified on 2026-07-18.
+// Native OpenSSH is used over Tailscale; no Tailscale SSH policy is enabled.
+{
+  "hosts": {
+    "desktop": "100.124.35.84",
+    "iphone":  "100.70.46.122",
+    "gcp":     "100.101.90.114",
+    "azure":   "100.87.159.14",
+  },
+
+  "grants": [
+    {"src": ["desktop", "iphone"], "dst": ["gcp", "azure"], "ip": ["tcp:22"]},
+    {"src": ["desktop", "iphone"], "dst": ["gcp"], "ip": ["tcp:50404"]},
+    {"src": ["gcp"], "dst": ["azure"], "ip": ["tcp:22", "tcp:8765"]},
+    {"src": ["azure"], "dst": ["gcp"], "ip": ["tcp:22", "tcp:8765"]},
+  ],
+}

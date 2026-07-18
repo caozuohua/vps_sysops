@@ -1,0 +1,31 @@
+[Unit]
+Description=new-api (LLM gateway)
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/root/new-api
+
+ExecStartPre=-/usr/bin/docker stop new-api
+ExecStartPre=-/usr/bin/docker rm -f new-api
+
+# Credentials stay in the host-local .env and are never committed.
+ExecStart=/usr/bin/docker run -d \
+  --name new-api \
+  --restart always \
+  --log-driver json-file \
+  --log-opt max-size=10m \
+  --log-opt max-file=3 \
+  --memory 512m \
+  --memory-swap 1g \
+  -p 127.0.0.1:3000:3000 \
+  -v /root/new-api/data:/data \
+  --env-file /root/new-api/.env \
+  calciumion/new-api:v1.0.0-rc.21
+
+ExecStop=/usr/bin/docker stop new-api
+
+[Install]
+WantedBy=multi-user.target

@@ -11,8 +11,12 @@
 ```
 vps_sysops/
 ├── ops.sh                  # 总入口菜单（交互式，统一调度 scripts/ 下模块）
+├── a2a-bridge/             # 两台 Hermes 间的私有 A2A 桥接与 MCP 适配器
 ├── config/
-│   └── ops.conf            # 全局配置：SSH 端口、放行端口、监控服务、阈值、备份、飞书告警
+│   ├── ops.conf            # 通用默认配置与主机 profile 自动选择
+│   └── hosts/              # GCP / Azure 非敏感主机配置
+├── docs/
+│   └── current-state.md    # 已验证的公网、Tailscale、端口与服务拓扑
 ├── scripts/                # 各功能模块（独立可运行，统一 source ../config/ops.conf）
 │   ├── 01_harden.sh         # 基础安全加固（防火墙/fail2ban/自动更新/swap）
 │   ├── 02_setup_env.sh      # 部署运行环境（Docker/Python/Node.js）
@@ -30,6 +34,8 @@ vps_sysops/
 │   ├── 14_web_stack.sh      # x-ui/Nginx/Let’s Encrypt（GCP Ubuntu）
 │   ├── 15_tune.sh           # 性能调优建议
 │   └── 16_report.sh         # 全量报告（汇聚全部模块，输出到 REPORT_DIR）
+├── system/                 # 通用及 GCP 专属的可复现系统配置、Tailscale ACL
+├── tests/                  # Shell/profile/Python 与 SQLite 备份 smoke tests
 └── README.md               # 本文档
 ```
 
@@ -47,7 +53,7 @@ vps_sysops/
 | 1 | `01_harden.sh` | 基础安全加固 | 是 |
 | 2 | `02_setup_env.sh` | 部署运行环境 | 是 |
 | 3 | `03_monitor.sh` | 系统监控/健康检查（cron） | 否 |
-| 4 | `04_backup.sh` | 备份 + 日志轮转（cron） | 部分 |
+| 4 | `04_backup.sh` | 一致性备份 + 日志轮转（cron） | 是 |
 | 5 | `05_overview.sh` | 系统概览 + GCP 元数据 | 否 |
 | 6 | `07_resources.sh` | CPU/内存/磁盘/网络监控 | 否 |
 | 7 | `06_processes.sh` | Top 进程 + 僵尸进程检测 | 否 |
@@ -75,7 +81,9 @@ vps_sysops/
    chmod +x ops.sh scripts/*.sh
    ```
 
-2. 编辑 `config/ops.conf`，按需修改 SSH 端口、放行端口、**监控服务名**、备份目录、告警阈值等。
+2. 已知主机会按 hostname 自动选择 `config/hosts/gcp.conf` 或
+   `config/hosts/azure.conf`。其他主机编辑 `config/ops.conf`，或用
+   `VPS_PROFILE=gcp|azure` 显式选择配置。
 
 3. 运行菜单（交互式）：
 
@@ -111,13 +119,24 @@ bash scripts/05_overview.sh --help           # 单脚本用法
 bash scripts/07_resources.sh                 # 直接执行（无需参数）
 ```
 
+当前两台 VPS 的静态公网 IP、Tailscale IP、ACL 端口矩阵、newAPI/x-ui/Xray
+链路和备份策略见 [`docs/current-state.md`](docs/current-state.md)。该文件是运维事实
+清单；网络或服务配置改变后应同步更新。
+
 ## 监控服务（Hermes Agent）
 
-`config/ops.conf` 中的 `MONITOR_SERVICES` 指定需要健康检查的服务。默认监控 **Hermes Agent 网关**：
+`config/ops.conf` 中的 `MONITOR_SERVICES` 指定需要健康检查的服务。通用默认仅监控
+Hermes Agent 网关；GCP/Azure profile 会覆盖为各自主机的完整关键服务列表：
 
 ```conf
 MONITOR_SERVICES="hermes-gateway.service"
 ```
+
+- GCP：SSH、Tailscale、Docker、nginx、x-ui、newAPI、A2A、iptables hardening、Certbot timer。
+- Azure：SSH、Tailscale，以及用户 `caozuohua` 的 Hermes gateway 与 A2A。
+
+`03_monitor.sh` 与 `08_services.sh` 会先查系统级 unit，再按 `MONITOR_USER` 查用户级
+unit，适配两台机器不同的 A2A 部署方式。
 
 Hermes 网关通过 `hermes gateway install` 注册为 **用户级 systemd 服务**
 （`~/.config/systemd/user/hermes-gateway.service`），`03_monitor.sh` 会按
@@ -177,7 +196,16 @@ system/
 │       └── system/
 │           ├── failsync.service    # 触发 sync_fail2ban_to_ufw.sh
 │           └── failsync.timer      # 每 30s 触发
+├── gcp/etc/                        # GCP 当前线上配置的脱敏副本
+│   ├── apt/sources.list.d/         # Ubuntu 26.04 的 Docker/Tailscale 等源
+│   ├── ssh/sshd_config.d/          # 禁止 Agent/远程转发与 tunnel
+│   ├── sysctl.d/                   # fq + BBR + swappiness
+│   └── systemd/system/             # newAPI、iptables、A2A Tailscale wait
+└── tailscale/grants.hujson         # 已验证的 tailnet 最小权限策略
 ```
+
+`system/gcp/` 中不包含 `/root/new-api/.env`、x-ui 秘密路径、TLS 私钥或 A2A Token。
+APT source 文件引用的厂商 keyring 仍须先通过各厂商官方安装流程创建。
 
 ### 部署到新机器 / 重装后恢复
 
@@ -206,13 +234,11 @@ sudo systemctl enable --now failsync.timer
 
 `scripts/14_web_stack.sh` 不负责安装来源不明的 x-ui 二进制；它假设 x-ui 已安装并监听本机端口，负责 Nginx 反代、HTTPS 证书和面板路径加固。
 
-先编辑 `config/ops.conf`：
+非敏感的 GCP 域名与端口已在 `config/hosts/gcp.conf`；秘密路径和邮箱写入被
+`.gitignore` 排除的 `config/hosts/gcp.local.conf`：
 
 ```conf
-XUI_DOMAIN="xui.example.com"
-XUI_PANEL_PORT=2053
 XUI_WEB_BASE_PATH="/xui_a1b2c3d4e5f6g7h8"
-XUI_DB_PATH="/etc/x-ui/x-ui.db"
 LETSENCRYPT_EMAIL="admin@example.com"
 ```
 
@@ -240,6 +266,34 @@ Ubuntu 内的 UFW 放行不等于 GCP VPC 防火墙放行。请在 GCP 防火墙
 - 随机路径只是降低扫描噪声，不是认证机制；x-ui 自身密码仍必须使用强密码。
 - 脚本不会自动修改 GCP 防火墙、x-ui 管理员密码或第三方 DNS。
 - 申请证书前先确认域名已解析、80/443 未被其他服务占用，并先在快照或测试机验证。
+
+## 私有 Hermes A2A
+
+`a2a-bridge/` 来自 Azure 当前运行分支，包含桥接服务、MCP 适配器、systemd unit
+模板和安全策略。服务只绑定各自的 Tailscale 地址，正确健康端点为 `/healthz`；
+根路径和 `/health` 返回 404 是预期行为。部署配置中远程 toolsets 被禁用，详细边界见
+`a2a-bridge/A2A_POLICY.md`。
+
+运行时 `state/`、`.env`、数据库、WAL、事件日志和 Python 缓存均由 `.gitignore`
+排除，禁止提交。
+
+## 一致性本机备份
+
+`04_backup.sh` 除普通目录归档外，还会对 profile 中的 `SQLITE_DATABASES` 使用
+SQLite 在线 `.backup` API，并对副本执行 `PRAGMA integrity_check`。归档及 SHA-256
+文件权限为 `0600`，默认保留 7 天。
+
+GCP profile 覆盖 newAPI、x-ui、A2A 数据库及 newAPI `.env`；Azure profile 覆盖
+A2A 数据库。备份只保存在 VPS 本机，不产生云快照费用，也不能替代异地灾备。
+
+```bash
+# 只读语法、profile 与 A2A Python 检查
+bash tests/smoke.sh
+
+# 在有 sqlite3 的 Linux root 环境测试临时 SQLite 备份、校验和与权限
+sudo bash tests/backup_smoke.sh
+```
+
 ## 定时任务建议
 
 健康检查每 5 分钟、备份每天凌晨、全量报告每小时：
@@ -250,10 +304,10 @@ Ubuntu 内的 UFW 放行不等于 GCP VPC 防火墙放行。请在 GCP 防火墙
 
 ```cron
 # 每 5 分钟健康检查（含 Hermes 网关存活 + CPU/内存/磁盘阈值，异常飞书告警）
-*/5 * * * * /home/youruser/vps_sysops/scripts/03_monitor.sh >> /var/log/vps-ops-monitor.log 2>&1
+*/5 * * * * VPS_PROFILE=gcp /home/youruser/vps_sysops/scripts/03_monitor.sh >> /var/log/vps-ops-monitor.log 2>&1
 
 # 每天凌晨 3 点备份关键配置
-0 3 * * * /home/youruser/vps_sysops/scripts/04_backup.sh >> /var/log/vps-ops-backup.log 2>&1
+0 3 * * * VPS_PROFILE=gcp /home/youruser/vps_sysops/scripts/04_backup.sh >> /var/log/vps-ops-backup.log 2>&1
 
 # 每小时生成全量报告（归档到 REPORT_DIR）
 0 * * * * /home/youruser/vps_sysops/scripts/16_report.sh >> /var/log/vps-ops-report.log 2>&1
@@ -267,12 +321,18 @@ Ubuntu 内的 UFW 放行不等于 GCP VPC 防火墙放行。请在 GCP 防火墙
 | 变量 | 说明 | 默认 |
 |------|------|------|
 | `SSH_PORT` | SSH 端口（改非默认前先确认连通） | `22` |
+| `VPS_PROFILE` | 主机配置；可用 `gcp` / `azure`，空值时按 hostname 识别 | `""` |
+| `VPS_PROFILE_FILE` | 可选的外部 profile 绝对路径，优先于内置 profile | `""` |
 | `EXTRA_ALLOW_PORTS` | 防火墙额外放行端口，逗号分隔 | `""` |
 | `MONITOR_SERVICES` | 健康检查的服务名（空格分隔） | `hermes-gateway.service` |
+| `MONITOR_USER` | 用户级 systemd unit 的所属用户 | `""` |
 | `CPU_THRESHOLD` / `MEM_THRESHOLD` / `DISK_THRESHOLD` | 告警阈值（%） | `90` / `85` / `85` |
 | `BACKUP_SOURCES` | 备份源目录（空格分隔） | `/etc /home` |
 | `BACKUP_DEST` | 备份存放目录 | `/opt/backups` |
 | `BACKUP_RETAIN_DAYS` | 备份保留天数 | `7` |
+| `SQLITE_DATABASES` | 需要一致性在线备份的 SQLite 数据库 | `""` |
+| `CONFIGURE_LOGROTATE` | 备份脚本是否安装日志轮转配置 | `true` |
+| `TAILSCALE_ALLOW_TARGETS` / `TAILSCALE_DENY_TARGETS` | `11_network.sh` 的 ACL 探测矩阵 | `""` |
 | `REPORT_DIR` | 全量报告输出目录 | `/tmp/vps-ops-reports` |
 | `FEISHU_WEBHOOK` | 飞书机器人 Webhook（留空仅本地输出） | `""` |
 
@@ -280,7 +340,7 @@ Ubuntu 内的 UFW 放行不等于 GCP VPC 防火墙放行。请在 GCP 防火墙
 
 - **无需 root**：`03_monitor` / `05_overview` / `06_processes` / `07_resources` / `08_services` /
   `09_logs` / `11_network` / `12_disk` / `15_tune`
-- **需要 root**：`01_harden` / `02_setup_env` / `04_backup`（logrotate 写盘部分）/ `10_security_audit`（部分子项）/
+- **需要 root**：`01_harden` / `02_setup_env` / `04_backup` / `10_security_audit`（部分子项）/
   `13_updates` / `16_report`（security、updates 子项）
 
 可选工具（`iostat`/`smartctl`/`dig`/`fail2ban-client`/`ufw`/`bc`）脚本会自动检测并优雅跳过。
@@ -292,4 +352,4 @@ Ubuntu 内的 UFW 放行不等于 GCP VPC 防火墙放行。请在 GCP 防火墙
 - `03_monitor.sh` 支持飞书机器人 Webhook 告警，在 `config/ops.conf` 中填入 `FEISHU_WEBHOOK` 即可；
   留空则只在本地/日志输出。
 - 所有脚本均为幂等设计（可重复运行），已安装的组件会自动跳过。
-- 首次运行前建议先在测试环境或快照后的实例上验证一遍。
+- 首次运行前建议先在测试环境或完成本机一致性备份后验证；不要为了运行工具包默认创建收费云快照。

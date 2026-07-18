@@ -21,6 +21,9 @@ usage() {
 
 网络诊断（接口 / 路由 / DNS / GCP 连通性 / 活跃连接 / 流量统计）
 
+可选环境变量:
+  VPS_PROFILE=gcp|azure   显式选择主机配置（已知主机会按 hostname 自动选择）
+
 选项:
   -h, --help   显示本帮助并退出
 EOF
@@ -41,6 +44,64 @@ cmd_network() {
 
   section "路由表"
   ip route show
+
+  section "主机 profile 与网络边界"
+  echo "VPS profile:       ${VPS_PROFILE:-generic}"
+  echo "记录的公网 IP:     ${PUBLIC_IP:-未配置}"
+  echo "记录的 Tailscale:  ${TAILSCALE_IP:-未配置}"
+  echo "公网允许 TCP:      ${EXPECTED_PUBLIC_TCP:-无}"
+  echo "公网应阻止 TCP:    ${EXPECTED_BLOCKED_TCP:-无}"
+
+  section "Tailscale 状态"
+  if command -v tailscale >/dev/null 2>&1; then
+    current_ts_ip=$(tailscale ip -4 2>/dev/null | head -1 || true)
+    echo "本机 Tailscale IPv4: ${current_ts_ip:-不可用}"
+    if [[ -n "${TAILSCALE_IP:-}" && "${current_ts_ip}" != "${TAILSCALE_IP}" ]]; then
+      warn "Tailscale IP 与 profile 不一致: expected=${TAILSCALE_IP} actual=${current_ts_ip:-none}"
+    fi
+    tailscale status 2>/dev/null || warn "tailscale status 失败"
+    if [[ -n "${TAILSCALE_PEER_IP:-}" ]]; then
+      tailscale ping --timeout=5s --c 1 "${TAILSCALE_PEER_IP}" 2>/dev/null || \
+        warn "Tailscale peer ping 失败: ${TAILSCALE_PEER_IP}"
+    fi
+  else
+    warn "未安装 tailscale"
+  fi
+
+  probe_tcp() {
+    local target="$1" host port
+    host="${target%:*}"
+    port="${target##*:}"
+    [[ "${host}" =~ ^[0-9.]+$ && "${port}" =~ ^[0-9]+$ ]] || return 2
+    timeout 5 bash -c "exec 3<>/dev/tcp/${host}/${port}" 2>/dev/null
+  }
+
+  section "Tailscale ACL TCP 验证"
+  if [[ -z "${TAILSCALE_ALLOW_TARGETS:-}" && -z "${TAILSCALE_DENY_TARGETS:-}" ]]; then
+    echo "当前 profile 未配置 ACL 探测目标"
+  fi
+  for target in ${TAILSCALE_ALLOW_TARGETS:-}; do
+    if probe_tcp "${target}"; then
+      echo -e "\e[32m✓\e[0m 允许路径可达: ${target}"
+    else
+      echo -e "\e[31m✗\e[0m 允许路径不可达: ${target}"
+    fi
+  done
+  for target in ${TAILSCALE_DENY_TARGETS:-}; do
+    if probe_tcp "${target}"; then
+      echo -e "\e[31m✗\e[0m 拒绝路径意外可达: ${target}"
+    else
+      echo -e "\e[32m✓\e[0m 拒绝路径已阻止: ${target}"
+    fi
+  done
+  if [[ -n "${A2A_HEALTH_URL:-}" ]]; then
+    if curl -fsS --max-time 5 "${A2A_HEALTH_URL}"; then
+      echo
+      echo -e "\e[32m✓\e[0m A2A /healthz 正常"
+    else
+      echo -e "\e[31m✗\e[0m A2A /healthz 异常: ${A2A_HEALTH_URL}"
+    fi
+  fi
 
   section "DNS 解析"
   echo "DNS 服务器: $(grep nameserver /etc/resolv.conf | awk '{print $2}' | tr '\n' ' ')"

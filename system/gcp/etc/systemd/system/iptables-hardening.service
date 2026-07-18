@@ -1,0 +1,20 @@
+[Unit]
+Description=Re-apply host and Docker ingress hardening
+After=network-online.target docker.service x-ui.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash -c "\
+  iptables -C INPUT -i ens4 -p tcp --dport 50404 -j DROP 2>/dev/null || \
+  iptables -I INPUT 1 -i ens4 -p tcp --dport 50404 -j DROP; \
+  while iptables -C DOCKER-USER -p tcp -m multiport --dports 3000,50404 -j DROP 2>/dev/null; do \
+    iptables -D DOCKER-USER -p tcp -m multiport --dports 3000,50404 -j DROP; \
+  done; \
+  iptables -C DOCKER-USER -p tcp --dport 3000 -j DROP 2>/dev/null || \
+  iptables -I DOCKER-USER 1 -p tcp --dport 3000 -j DROP"
+ExecStartPost=/bin/bash -c "iptables -C INPUT -i ens4 -p tcp --dport 50404 -j DROP && iptables -C DOCKER-USER -p tcp --dport 3000 -j DROP"
+
+[Install]
+WantedBy=multi-user.target

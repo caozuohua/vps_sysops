@@ -9,7 +9,10 @@ source "${SCRIPT_DIR}/../config/ops.conf"
 # 用法说明（bash scripts/03_monitor.sh [-h|--help]）
 usage() {
   cat <<EOF
-用法: sudo bash scripts/03_monitor.sh
+用法: bash scripts/03_monitor.sh
+
+可选环境变量:
+  VPS_PROFILE=gcp|azure   显式选择主机配置（已知主机会按 hostname 自动选择）
 
 系统监控/健康检查，可加入 cron 定时执行
 
@@ -47,19 +50,33 @@ if (( DISK_PCT > DISK_THRESHOLD )); then
   ALERTS+=("磁盘使用过高: ${DISK_PCT}% (阈值 ${DISK_THRESHOLD}%)")
 fi
 
-# systemd 服务存活检查
-# Hermes 网关（hermes-gateway.service）是「用户级」systemd 服务（hermes gateway install
-# 注册在 ~/.config/systemd/user/），需用 systemctl --user 检测；普通系统服务走 systemctl。
-# 这里先查系统级，未运行再回退用户级，兼顾两种情况。
-for svc in ${MONITOR_SERVICES}; do
-  svc_name="${svc%.service}"
-  if systemctl is-active --quiet "${svc_name}.service" 2>/dev/null; then
-    : # 系统级运行中
-  elif [[ -d "/run/user/$(id -u)" ]] && \
-       XDG_RUNTIME_DIR="/run/user/$(id -u)" systemctl --user is-active --quiet "${svc_name}.service" 2>/dev/null; then
-    : # 用户级运行中
+# systemd 服务存活检查。先查系统级，再检查 MONITOR_USER 的用户级服务。
+user_unit_active() {
+  local unit="$1"
+  local target_user="${MONITOR_USER:-$(id -un)}"
+  local target_uid
+  target_uid=$(id -u "${target_user}" 2>/dev/null) || return 1
+  [[ -d "/run/user/${target_uid}" ]] || return 1
+
+  if [[ "$(id -un)" == "${target_user}" ]]; then
+    XDG_RUNTIME_DIR="/run/user/${target_uid}" systemctl --user is-active --quiet "${unit}" 2>/dev/null
+  elif [[ $EUID -eq 0 ]] && command -v runuser >/dev/null 2>&1; then
+    runuser -u "${target_user}" -- env XDG_RUNTIME_DIR="/run/user/${target_uid}" \
+      systemctl --user is-active --quiet "${unit}" 2>/dev/null
   else
-    ALERTS+=("服务异常: ${svc} 未运行（system / user 均未激活）")
+    return 1
+  fi
+}
+
+for svc in ${MONITOR_SERVICES}; do
+  unit="${svc}"
+  [[ "${unit}" == *.* ]] || unit="${unit}.service"
+  if systemctl is-active --quiet "${unit}" 2>/dev/null; then
+    : # 系统级运行中
+  elif user_unit_active "${unit}"; then
+    : # MONITOR_USER 的用户级服务运行中
+  else
+    ALERTS+=("服务异常: ${unit} 未运行（system / ${MONITOR_USER:-current user} user 均未激活）")
   fi
 done
 

@@ -1,0 +1,26 @@
+# Secrets and host-local overrides
+.env
+.env.*
+*.local.conf
+config/hosts/*.local.conf
+
+# Runtime state, credentials, and databases
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.key
+*.pem
+state/
+
+# Generated backups and reports
+*.tar.gz
+*.sha256
+reports/
+
+# Language/editor noise
+__pycache__/
+*.py[cod]
+.venv/
+.DS_Store
+Thumbs.db

@@ -36,21 +36,66 @@ fi
 cmd_services() {
   title "服务管理"
 
-  section "关键服务状态"
-  local services=("ssh" "ufw" "fail2ban" "nginx" "apache2" "mysql" "postgresql"
-                  "docker" "google-cloud-ops-agent" "stackdriver-agent" "chronyd" "ntp")
+  user_systemctl() {
+    local target_user="${MONITOR_USER:-$(id -un)}"
+    local target_uid
+    target_uid=$(id -u "${target_user}" 2>/dev/null) || return 1
+    [[ -d "/run/user/${target_uid}" ]] || return 1
+    if [[ "$(id -un)" == "${target_user}" ]]; then
+      XDG_RUNTIME_DIR="/run/user/${target_uid}" systemctl --user "$@"
+    elif [[ $EUID -eq 0 ]] && command -v runuser >/dev/null 2>&1; then
+      runuser -u "${target_user}" -- env XDG_RUNTIME_DIR="/run/user/${target_uid}" \
+        systemctl --user "$@"
+    else
+      return 1
+    fi
+  }
+
+  declare -A seen_units=()
+  print_unit() {
+    local requested="$1" required="${2:-no}"
+    local unit="${requested}" load status enabled scope color
+    [[ "${unit}" == *.* ]] || unit="${unit}.service"
+    [[ -n "${seen_units[$unit]:-}" ]] && return 0
+    seen_units["$unit"]=1
+
+    load=$(systemctl show "${unit}" --property=LoadState --value 2>/dev/null || true)
+    if [[ -n "${load}" && "${load}" != "not-found" ]]; then
+      scope="system"
+      status=$(systemctl is-active "${unit}" 2>/dev/null || true)
+      enabled=$(systemctl is-enabled "${unit}" 2>/dev/null || echo "N/A")
+    else
+      load=$(user_systemctl show "${unit}" --property=LoadState --value 2>/dev/null || true)
+      if [[ -n "${load}" && "${load}" != "not-found" ]]; then
+        scope="user:${MONITOR_USER:-$(id -un)}"
+        status=$(user_systemctl is-active "${unit}" 2>/dev/null || true)
+        enabled=$(user_systemctl is-enabled "${unit}" 2>/dev/null || echo "N/A")
+      elif [[ "${required}" == "yes" ]]; then
+        printf "%-35s \e[31m%-15s\e[0m %s\\n" "${unit}" "missing" "profile=${VPS_PROFILE:-generic}"
+        return 0
+      else
+        return 0
+      fi
+    fi
+
+    color="\e[32m"
+    [[ "${status}" != "active" ]] && color="\e[31m"
+    printf "%-35s ${color}%-15s\e[0m %s\\n" "${unit}" "${status}" "${scope}, enabled=${enabled}"
+  }
+
+  section "主机 profile 监控服务"
+  echo "VPS profile: ${VPS_PROFILE:-generic}"
   printf "%-35s %-15s %s\\n" "服务名称" "状态" "说明"
   printf "%-35s %-15s %s\\n" "$(printf '─%.0s' {1..35})" "$(printf '─%.0s' {1..15})" "$(printf '─%.0s' {1..20})"
+  for svc in ${MONITOR_SERVICES}; do
+    print_unit "${svc}" yes
+  done
+
+  section "其他常见服务"
+  local services=("ufw" "fail2ban" "apache2" "mysql" "postgresql" "chronyd" "ntp"
+                  "google-cloud-ops-agent" "stackdriver-agent")
   for svc in "${services[@]}"; do
-    if systemctl list-units --type=service --all | grep -q "${svc}.service"; then
-      local status
-      status=$(systemctl is-active "$svc" 2>/dev/null || echo "unknown")
-      local color="\e[32m"
-      [[ "$status" != "active" ]] && color="\e[31m"
-      local enabled
-      enabled=$(systemctl is-enabled "$svc" 2>/dev/null || echo "N/A")
-      printf "%-35s ${color}%-15s\e[0m %s\\n" "$svc" "$status" "enabled=$enabled"
-    fi
+    print_unit "${svc}" no
   done
 
   section "最近启动/停止的服务（最近 10 条）"
