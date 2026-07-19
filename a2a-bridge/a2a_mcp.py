@@ -92,7 +92,6 @@ TOOLS = [
             "message": {"type": "string", "description": "Self-contained task and desired output format."},
             "context_id": {"type": "string", "description": "Reuse to continue a previous delegation."},
             "role": {"type": "string", "description": "Policy role, usually default."},
-            "toolsets": {"type": "array", "items": {"type": "string"}, "description": "Only use toolsets advertised/allowed by the remote agent."},
         }, "required": ["message"], "additionalProperties": False},
     },
     {
@@ -139,6 +138,10 @@ def handle_tool(name: str, args: dict) -> dict:
             return result(json.loads(response.read()))
     if name == "a2a_delegate_task":
         params = dict(args)
+        # Older clients may still send this field. The deployed peers run A2A
+        # workers in safe mode, so forwarding it can only trigger a policy
+        # rejection; silently discard it at the adapter boundary.
+        params.pop("toolsets", None)
         if CALLBACK:
             params["callbackUrl"] = CALLBACK
         return result(call("message/send", params))
