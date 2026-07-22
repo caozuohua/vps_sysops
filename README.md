@@ -1,5 +1,12 @@
 # vps_sysops — VPS 运维工具包（模块化）
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Ubuntu%2024.04%2B-orange.svg)](https://ubuntu.com)
+[![Shell](https://img.shields.io/badge/shell-bash%204.4%2B-green.svg)](https://www.gnu.org/software/bash/)
+[![Security Policy](https://img.shields.io/badge/security-policy-red.svg)](SECURITY.md)
+
+> [CHANGELOG](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [License](LICENSE)
+
 一套面向 Ubuntu VPS 的生产级 Shell 运维工具包，按**模块化架构**组织：
 `ops.sh` 是统一交互入口，各功能拆到 `scripts/` 下独立、可单独调用的脚本，
 共享 `config/ops.conf` 一处配置。覆盖 **17 个功能模块** —— 从基础安全加固、
@@ -155,7 +162,7 @@ hermes gateway install
 
 ### 已知环境限制（根因）
 
-本机 fail2ban v1.0.2 的 **action 执行机制整体失效**：ban 事件能产生（内存封禁 + 日志 `Ban <IP>`），
+本机 fail2ban v1.0.2 的 **action 执行机制整体失效**：ban 事件能产生（内存���禁 + 日志 `Ban <IP>`），
 但 `actionban` 命令**从不执行**（已排除 systemd CapabilityBoundingSet / AppArmor / PATH / nftables 模板问题，
 并用 action 调试日志确认进程从不调用 nft/ufw）。因此 fail2ban 原生无法把封禁下发到防火墙。
 
@@ -321,7 +328,7 @@ sudo bash tests/backup_smoke.sh
 | 变量 | 说明 | 默认 |
 |------|------|------|
 | `SSH_PORT` | SSH 端口（改非默认前先确认连通） | `22` |
-| `VPS_PROFILE` | 主机配置；可用 `gcp` / `azure`，空值时按 hostname 识别 | `""` |
+| `VPS_PROFILE` | 主机配置；可用 `gcp` / `azure`，空��时按 hostname 识别 | `""` |
 | `VPS_PROFILE_FILE` | 可选的外部 profile 绝对路径，优先于内置 profile | `""` |
 | `EXTRA_ALLOW_PORTS` | 防火墙额外放行端口，逗号分隔 | `""` |
 | `MONITOR_SERVICES` | 健康检查的服务名（空格分隔） | `hermes-gateway.service` |
