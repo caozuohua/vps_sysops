@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# Hermes Lite service controller.
+
+set -euo pipefail
+
+AGENTS=("hermes-gateway.service")
+LOG_LINES=50
+VENV_BASE="${HOME}/.hermes-lite"
+
+info() { printf '[INFO] %s\n' "$*"; }
+ok() { printf '[OK] %s\n' "$*"; }
+warn() { printf '[WARN] %s\n' "$*"; }
+die() { printf '[ERR] %s\n' "$*" >&2; exit 1; }
+
+valid_agent() {
+  local target="${1:-${AGENTS[0]}}"
+  [[ " ${AGENTS[*]} " == *" ${target} "* ]]
+}
+
+require_agent() {
+  local target="${1:-${AGENTS[0]}}"
+  valid_agent "$target" || die "未知 agent: $target（可选: ${AGENTS[*]}）"
+  printf '%s\n' "$target"
+}
+
+status_of() { systemctl is-active "$1" 2>/dev/null || true; }
+
+cmd_status() {
+  printf '\nAgent 状态总览\n────────────────────────\n'
+  for agent in "${AGENTS[@]}"; do
+    case "$(status_of "$agent")" in
+      active) printf '● %s → 运行中\n' "$agent" ;;
+      inactive) printf '○ %s → 已停止\n' "$agent" ;;
+      failed) printf '✗ %s → 失败\n' "$agent" ;;
+      *) printf '? %s → 未知\n' "$agent" ;;
+    esac
+  done
+  printf '\n'
+}
+
+cmd_start() {
+  local target; target=$(require_agent "${1:-}")
+  [[ "$(status_of "$target")" == active ]] && { warn "$target 已在运行，跳过"; return; }
+  info "启动 $target ..."; sudo systemctl start "$target"; sleep 1
+  [[ "$(status_of "$target")" == active ]] && ok "$target 已启动" || die "启动失败"
+}
+
+cmd_stop() {
+  local target; target=$(require_agent "${1:-}")
+  [[ "$(status_of "$target")" != active ]] && { warn "$target 未在运行，跳过"; return; }
+  info "停止 $target ..."; sudo systemctl stop "$target"; ok "$target 已停止"
+}
+
+cmd_restart() {
+  local target; target=$(require_agent "${1:-}")
+  info "重启 $target ..."; sudo systemctl restart "$target"; sleep 1
+  [[ "$(status_of "$target")" == active ]] && ok "$target 已重启" || die "重启失败"
+}
+
+cmd_log() {
+  local target lines
+  if [[ "${1:-}" =~ ^[0-9]+$ ]]; then
+    target="${AGENTS[0]}"; lines="$1"
+  else
+    target=$(require_agent "${1:-}"); lines="${2:-$LOG_LINES}"
+  fi
+  sudo journalctl -u "$target" -n "$lines" --no-pager
+}
+
+cmd_logf() {
+  local target; target=$(require_agent "${1:-}")
+  sudo journalctl -u "$target" -f
+}
+
+cmd_venv() {
+  local python="$VENV_BASE/venv/bin/python"
+  [[ -x "$python" ]] || die "未找到 virtualenv: $python"
+  "$python" --version
+}
+
+cmd_help() {
+  cat <<EOF
+agent-ctl — Hermes Lite 运维工具
+
+用法:
+  agent-ctl status
+  agent-ctl start [hermes-gateway.service]
+  agent-ctl stop [hermes-gateway.service]
+  agent-ctl restart [hermes-gateway.service]
+  agent-ctl log [行数]
+  agent-ctl log [hermes-gateway.service] [行数]
+  agent-ctl logf [hermes-gateway.service]
+  agent-ctl venv
+  agent-ctl help
+
+操作服务: hermes-gateway.service
+EOF
+}
+
+command="${1:-help}"
+shift || true
+case "$command" in
+  status) cmd_status ;;
+  start) cmd_start "$@" ;;
+  stop) cmd_stop "$@" ;;
+  restart) cmd_restart "$@" ;;
+  log) cmd_log "$@" ;;
+  logf) cmd_logf "$@" ;;
+  venv) cmd_venv ;;
+  help|--help|-h) cmd_help ;;
+  *) die "未知命令: $command，运行 agent-ctl help 查看帮助" ;;
+esac
