@@ -11,9 +11,11 @@ Private, task-based A2A subset for the two Hermes instances.
   signatures, timestamp windows, and request-ID replay protection
 - SQLite WAL task/context store, restart recovery, TTL cleanup, bounded queue,
   one Hermes worker, callback retries, and `/metrics`
-- Toolsets are hard-disabled in the deployed configuration. The code also
-  rejects toolsets unless `A2A_ENABLE_TOOLS=true` and the caller role is
-  allowed by `A2A_TOOL_POLICY`.
+- Ordinary requests remain tool-free. Explicit QPC/多维表格 requests are
+  auto-routed to the dedicated `qpc-bitable` capability, which grants only
+  `terminal` and `skills` so HermesLite can load the QPC skill and perform the
+  authenticated record write. The code rejects all other toolsets unless
+  `A2A_ENABLE_TOOLS=true` and the caller role is allowed by `A2A_TOOL_POLICY`.
 
 This is intentionally a narrow private implementation. It does not expose
 the public internet and does not yet implement full A2A artifact `parts` or
