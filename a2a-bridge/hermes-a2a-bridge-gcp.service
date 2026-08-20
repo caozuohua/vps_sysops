@@ -14,7 +14,7 @@ Environment=A2A_BIND=100.101.90.114
 Environment=A2A_PORT=8765
 Environment=A2A_AGENT_NAME=gcp-hermeslite
 Environment=A2A_STATE_DIR=/home/caozuohua99/a2a-bridge/state
-Environment=A2A_PEERS=100.87.159.14
+Environment=A2A_PEERS=100.115.42.83
 Environment=A2A_ENABLE_TOOLS=false
 Environment=A2A_ALLOWED_TOOLSETS=
 Environment=HERMES_HOME=/home/caozuohua99/.hermes-lite

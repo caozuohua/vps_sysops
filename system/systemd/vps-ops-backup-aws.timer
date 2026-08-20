@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Mem0 PostgreSQL backup daily (AWS)
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=20min
+Persistent=true
+Unit=vps-ops-backup-aws.service
+
+[Install]
+WantedBy=timers.target

@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=/home/caozuohua/vps_sysops/a2a-bridge
 EnvironmentFile=/home/caozuohua/.config/hermes-a2a-bridge.env
-Environment=A2A_BIND=100.87.159.14
+Environment=A2A_BIND=100.115.42.83
 Environment=A2A_PORT=8765
 Environment=A2A_AGENT_NAME=azure-hermesagent
 Environment=A2A_STATE_DIR=/home/caozuohua/vps_sysops/a2a-bridge/state

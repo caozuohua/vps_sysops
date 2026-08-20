@@ -4,7 +4,7 @@ import json, subprocess, sys, time, os
 
 ENV = dict(os.environ)
 ENV["A2A_REMOTE_URL"] = "http://100.101.90.114:8765/a2a"
-ENV["A2A_CALLBACK_URL"] = "http://100.87.159.14:8765/a2a/v1/events"
+ENV["A2A_CALLBACK_URL"] = "http://100.115.42.83:8765/a2a/v1/events"
 ENV["A2A_TOKEN_FILE"] = "/home/caozuohua/.config/hermes-a2a-bridge.env"
 
 proc = subprocess.Popen(

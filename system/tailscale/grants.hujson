@@ -5,13 +5,17 @@
     "desktop": "100.124.35.84",
     "iphone":  "100.70.46.122",
     "gcp":     "100.101.90.114",
-    "azure":   "100.87.159.14",
+    "azure":   "100.115.42.83",
+    "aws":     "100.112.88.72",
   },
 
   "grants": [
     {"src": ["desktop", "iphone"], "dst": ["gcp", "azure"], "ip": ["tcp:22"]},
     {"src": ["desktop", "iphone"], "dst": ["gcp"], "ip": ["tcp:50404"]},
     {"src": ["gcp"], "dst": ["azure"], "ip": ["tcp:22", "tcp:8765"]},
+    {"src": ["gcp"], "dst": ["aws"], "ip": ["tcp:22", "tcp:8888"]},
     {"src": ["azure"], "dst": ["gcp"], "ip": ["tcp:22", "tcp:8765"]},
+    {"src": ["azure"], "dst": ["aws"], "ip": ["tcp:22", "tcp:8888"]},
+    {"src": ["aws"], "dst": ["gcp", "azure"], "ip": ["tcp:22"]},
   ],
 }

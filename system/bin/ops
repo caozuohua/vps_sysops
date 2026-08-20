@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# ops —— VPS sysops 的全局入口
+set -euo pipefail
+
+if [[ -n "${VPS_SYSOPS_ROOT:-}" ]]; then
+  roots=("${VPS_SYSOPS_ROOT}")
+else
+  roots=(/opt/vps_sysops /home/caozuohua/vps_sysops)
+fi
+
+for root in "${roots[@]}"; do
+  if [[ -x "${root}/ops.sh" ]]; then
+    exec /usr/bin/bash "${root}/ops.sh" "$@"
+  fi
+done
+
+echo "找不到 vps_sysops/ops.sh，请检查 VPS_SYSOPS_ROOT 或部署路径" >&2
+exit 1

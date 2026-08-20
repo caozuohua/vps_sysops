@@ -37,6 +37,7 @@ show_menu() {
     echo "15) 生成完整报告"
     echo "16) 交互式运行所有模块"
     echo "17) x-ui/Nginx/Let’s Encrypt Web 栈"
+    echo "18) Mem0 服务状态（只读）"
     echo "0) 退出"
     echo
 }
@@ -64,6 +65,7 @@ VPS 运维工具包（模块化）— 交互式总入口
   13)  系统更新检查        14)  性能调优建议      15)  生成完整报告
   16)  交互式运行所有模块  0)   退出
   17)  x-ui/Nginx/Let’s Encrypt Web 栈
+  18)  Mem0 服务状态（只读）
 EOF
     exit 0
 fi
@@ -119,7 +121,7 @@ while true; do
             ;;
         16)
             # 交互式运行所有模块
-            for script in 05_overview 07_resources 06_processes 08_services 09_logs 10_security_audit 11_network 12_disk 13_updates 14_web_stack 15_tune; do
+            for script in 05_overview 07_resources 06_processes 08_services 09_logs 10_security_audit 11_network 12_disk 13_updates 14_web_stack 15_tune mem0; do
                 if [[ "$script" == 10_security_audit || "$script" == 13_updates || "$script" == 14_web_stack || "$script" == 16_report ]]; then
                     sudo bash "${SCRIPT_DIR}/scripts/${script}.sh"
                 else
@@ -130,6 +132,9 @@ while true; do
             ;;
         17)
             sudo bash "${SCRIPT_DIR}/scripts/14_web_stack.sh"
+            ;;
+        18)
+            bash "${SCRIPT_DIR}/scripts/mem0.sh" status
             ;;
         0)
             echo "再见！"
