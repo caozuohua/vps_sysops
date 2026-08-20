@@ -410,8 +410,9 @@ sudo VPS_PROFILE=aws bash scripts/mem0_backup.sh restore-smoke --yes --format js
 
 ## GCP Hermes Agent 服务管理
 
-GCP 的 `ops` 菜单项 19 委托主机现有的 `/usr/local/bin/agent-ctl`，不重复实现
-systemd 控制逻辑。也可以直接调用：
+GCP 的 `ops` 菜单项 19 优先调用仓库内的 `scripts/agent-ctl`，不重复实现
+systemd 控制逻辑；仓库脚本缺失时才回退到主机现有的 `/usr/local/bin/agent-ctl`。
+也可以直接调用：
 
 ```bash
 bash scripts/agent_ctl.sh status
