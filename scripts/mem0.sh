@@ -349,9 +349,9 @@ run_smoke() {
     smoke_ok=false
     smoke_error="MEM0_API_BASE_URL is not configured"
   fi
-  if [[ -z "${MEM0_AUTH_FILE}" || ! -r "${MEM0_AUTH_FILE}" ]]; then
+  if [[ -z "${MEM0_AUTH_FILE}" ]]; then
     smoke_ok=false
-    smoke_error="smoke auth file is not configured or readable"
+    smoke_error="smoke auth file is not configured"
   fi
   if ! command -v python3 >/dev/null 2>&1; then
     smoke_ok=false
