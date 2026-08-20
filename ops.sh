@@ -38,6 +38,9 @@ show_menu() {
     echo "16) 交互式运行所有模块"
     echo "17) x-ui/Nginx/Let’s Encrypt Web 栈"
     echo "18) Mem0 服务状态（只读）"
+    if [[ "${AGENT_ENABLED}" == "true" ]]; then
+        echo "19) Hermes Agent 服务管理"
+    fi
     echo "0) 退出"
     echo
 }
@@ -66,6 +69,7 @@ VPS 运维工具包（模块化）— 交互式总入口
   16)  交互式运行所有模块  0)   退出
   17)  x-ui/Nginx/Let’s Encrypt Web 栈
   18)  Mem0 服务状态（只读）
+  19)  Hermes Agent 服务管理（按 profile 配置）
 EOF
     exit 0
 fi
@@ -135,6 +139,9 @@ while true; do
             ;;
         18)
             bash "${SCRIPT_DIR}/scripts/mem0.sh" status
+            ;;
+        19)
+            bash "${SCRIPT_DIR}/scripts/agent_ctl.sh"
             ;;
         0)
             echo "再见！"

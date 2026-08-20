@@ -5,3 +5,4 @@
 *.timer text eol=lf
 *.local text eol=lf
 system/bin/* text eol=lf
+scripts/agent-ctl text eol=lf

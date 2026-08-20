@@ -1,112 +1,177 @@
 #!/usr/bin/env bash
-# Hermes Lite service controller.
-
+# agent-ctl —— profile-driven Hermes Agent service controller
 set -euo pipefail
 
-AGENTS=("hermes-gateway.service")
-LOG_LINES=50
-VENV_BASE="${HOME}/.hermes-lite"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/ops.conf"
+
+AGENT_ENABLED="${AGENT_ENABLED:-false}"
+AGENT_SERVICE="${AGENT_SERVICE:-hermes-gateway.service}"
+AGENT_SCOPE="${AGENT_SCOPE:-system}"
+AGENT_USER="${AGENT_USER:-${MONITOR_USER:-}}"
+AGENT_VENV="${AGENT_VENV:-}"
+LOG_LINES="${AGENT_LOG_LINES:-50}"
 
 info() { printf '[INFO] %s\n' "$*"; }
 ok() { printf '[OK] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*"; }
 die() { printf '[ERR] %s\n' "$*" >&2; exit 1; }
 
+require_enabled() {
+  [[ "${AGENT_ENABLED}" == "true" ]] || die "当前 profile 未配置 Hermes Agent 服务"
+  [[ -n "${AGENT_SERVICE}" ]] || die "AGENT_SERVICE 未配置"
+  case "${AGENT_SCOPE}" in
+    system) ;;
+    user)
+      [[ -n "${AGENT_USER}" ]] || die "user scope 需要配置 AGENT_USER"
+      ;;
+    *) die "未知 AGENT_SCOPE: ${AGENT_SCOPE}（应为 system 或 user）" ;;
+  esac
+}
+
 valid_agent() {
-  local target="${1:-${AGENTS[0]}}"
-  [[ " ${AGENTS[*]} " == *" ${target} "* ]]
+  local target="${1:-${AGENT_SERVICE}}"
+  [[ "${target}" == "${AGENT_SERVICE}" ]]
 }
 
 require_agent() {
-  local target="${1:-${AGENTS[0]}}"
-  valid_agent "$target" || die "未知 agent: $target（可选: ${AGENTS[*]}）"
-  printf '%s\n' "$target"
+  local target="${1:-${AGENT_SERVICE}}"
+  valid_agent "${target}" || die "未知 agent: ${target}（可选: ${AGENT_SERVICE}）"
+  printf '%s\n' "${target}"
 }
 
-status_of() { systemctl is-active "$1" 2>/dev/null || true; }
+user_systemctl() {
+  local uid
+  uid="$(id -u "${AGENT_USER}")" || die "找不到 Agent 用户: ${AGENT_USER}"
+  if [[ "$(id -un)" == "${AGENT_USER}" ]]; then
+    XDG_RUNTIME_DIR="/run/user/${uid}" systemctl --user "$@"
+  elif [[ "${EUID}" -eq 0 ]] && command -v runuser >/dev/null 2>&1; then
+    runuser -u "${AGENT_USER}" -- env XDG_RUNTIME_DIR="/run/user/${uid}" systemctl --user "$@"
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo -n -u "${AGENT_USER}" env XDG_RUNTIME_DIR="/run/user/${uid}" systemctl --user "$@"
+  else
+    die "无法切换到 Agent 用户: ${AGENT_USER}"
+  fi
+}
+
+service_control() {
+  if [[ "${AGENT_SCOPE}" == "user" ]]; then
+    user_systemctl "$@"
+    return
+  fi
+  case "${1:-}" in
+    is-active|is-enabled|show|status)
+      systemctl "$@"
+      ;;
+    *)
+      sudo systemctl "$@"
+      ;;
+  esac
+}
+
+status_of() {
+  service_control is-active "${1}" 2>/dev/null || true
+}
 
 cmd_status() {
+  require_enabled
   printf '\nAgent 状态总览\n────────────────────────\n'
-  for agent in "${AGENTS[@]}"; do
-    case "$(status_of "$agent")" in
-      active) printf '● %s → 运行中\n' "$agent" ;;
-      inactive) printf '○ %s → 已停止\n' "$agent" ;;
-      failed) printf '✗ %s → 失败\n' "$agent" ;;
-      *) printf '? %s → 未知\n' "$agent" ;;
-    esac
-  done
+  case "$(status_of "${AGENT_SERVICE}")" in
+    active) printf '● %s [%s] → 运行中\n' "${AGENT_SERVICE}" "${AGENT_SCOPE}" ;;
+    inactive) printf '○ %s [%s] → 已停止\n' "${AGENT_SERVICE}" "${AGENT_SCOPE}" ;;
+    failed) printf '✗ %s [%s] → 失败\n' "${AGENT_SERVICE}" "${AGENT_SCOPE}" ;;
+    *) printf '? %s [%s] → 未知\n' "${AGENT_SERVICE}" "${AGENT_SCOPE}" ;;
+  esac
   printf '\n'
 }
 
 cmd_start() {
-  local target; target=$(require_agent "${1:-}")
-  [[ "$(status_of "$target")" == active ]] && { warn "$target 已在运行，跳过"; return; }
-  info "启动 $target ..."; sudo systemctl start "$target"; sleep 1
-  [[ "$(status_of "$target")" == active ]] && ok "$target 已启动" || die "启动失败"
+  require_enabled
+  local target; target="$(require_agent "${1:-}")"
+  [[ "$(status_of "${target}")" == active ]] && { warn "${target} 已在运行，跳过"; return; }
+  info "启动 ${target} ..."
+  service_control start "${target}"
+  sleep 1
+  [[ "$(status_of "${target}")" == active ]] && ok "${target} 已启动" || die "启动失败"
 }
 
 cmd_stop() {
-  local target; target=$(require_agent "${1:-}")
-  [[ "$(status_of "$target")" != active ]] && { warn "$target 未在运行，跳过"; return; }
-  info "停止 $target ..."; sudo systemctl stop "$target"; ok "$target 已停止"
+  require_enabled
+  local target; target="$(require_agent "${1:-}")"
+  [[ "$(status_of "${target}")" != active ]] && { warn "${target} 未在运行，跳过"; return; }
+  info "停止 ${target} ..."
+  service_control stop "${target}"
+  ok "${target} 已停止"
 }
 
 cmd_restart() {
-  local target; target=$(require_agent "${1:-}")
-  info "重启 $target ..."; sudo systemctl restart "$target"; sleep 1
-  [[ "$(status_of "$target")" == active ]] && ok "$target 已重启" || die "重启失败"
+  require_enabled
+  local target; target="$(require_agent "${1:-}")"
+  info "重启 ${target} ..."
+  service_control restart "${target}"
+  sleep 1
+  [[ "$(status_of "${target}")" == active ]] && ok "${target} 已重启" || die "重启失败"
 }
 
 cmd_log() {
+  require_enabled
   local target lines
   if [[ "${1:-}" =~ ^[0-9]+$ ]]; then
-    target="${AGENTS[0]}"; lines="$1"
+    target="${AGENT_SERVICE}"; lines="$1"
   else
-    target=$(require_agent "${1:-}"); lines="${2:-$LOG_LINES}"
+    target="$(require_agent "${1:-}")"; lines="${2:-${LOG_LINES}}"
   fi
-  sudo journalctl -u "$target" -n "$lines" --no-pager
+  if [[ "${AGENT_SCOPE}" == "user" ]]; then
+    journalctl --user -u "${target}" -n "${lines}" --no-pager
+  else
+    sudo journalctl -u "${target}" -n "${lines}" --no-pager
+  fi
 }
 
 cmd_logf() {
-  local target; target=$(require_agent "${1:-}")
-  sudo journalctl -u "$target" -f
+  require_enabled
+  local target; target="$(require_agent "${1:-}")"
+  if [[ "${AGENT_SCOPE}" == "user" ]]; then
+    journalctl --user -u "${target}" -f
+  else
+    sudo journalctl -u "${target}" -f
+  fi
 }
 
 cmd_venv() {
-  local python="$VENV_BASE/venv/bin/python"
-  [[ -x "$python" ]] || die "未找到 virtualenv: $python"
-  "$python" --version
+  require_enabled
+  [[ -x "${AGENT_VENV}" ]] || die "未找到 Agent Python 环境: ${AGENT_VENV:-未配置}"
+  "${AGENT_VENV}" --version
 }
 
 cmd_help() {
   cat <<EOF
-agent-ctl — Hermes Lite 运维工具
+agent-ctl — Hermes Agent 服务运维
 
 用法:
   agent-ctl status
-  agent-ctl start [hermes-gateway.service]
-  agent-ctl stop [hermes-gateway.service]
-  agent-ctl restart [hermes-gateway.service]
+  agent-ctl start [${AGENT_SERVICE}]
+  agent-ctl stop [${AGENT_SERVICE}]
+  agent-ctl restart [${AGENT_SERVICE}]
   agent-ctl log [行数]
-  agent-ctl log [hermes-gateway.service] [行数]
-  agent-ctl logf [hermes-gateway.service]
+  agent-ctl logf [${AGENT_SERVICE}]
   agent-ctl venv
   agent-ctl help
 
-操作服务: hermes-gateway.service
+当前配置: enabled=${AGENT_ENABLED}, scope=${AGENT_SCOPE}, user=${AGENT_USER:-无}, service=${AGENT_SERVICE}
 EOF
 }
 
 command="${1:-help}"
 shift || true
-case "$command" in
-  status) cmd_status ;;
+case "${command}" in
+  status) cmd_status "$@" ;;
   start) cmd_start "$@" ;;
   stop) cmd_stop "$@" ;;
   restart) cmd_restart "$@" ;;
   log) cmd_log "$@" ;;
   logf) cmd_logf "$@" ;;
-  venv) cmd_venv ;;
+  venv) cmd_venv "$@" ;;
   help|--help|-h) cmd_help ;;
-  *) die "未知命令: $command，运行 agent-ctl help 查看帮助" ;;
+  *) die "未知命令: ${command}，运行 agent-ctl help 查看帮助" ;;
 esac

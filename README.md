@@ -9,7 +9,7 @@
 
 一套面向 Ubuntu VPS 的生产级 Shell 运维工具包，按**模块化架构**组织：
 `ops.sh` 是统一交互入口，各功能拆到 `scripts/` 下独立、可单独调用的脚本，
-共享 `config/ops.conf` 一处配置。覆盖 **18 个功能模块** —— 从基础安全加固、
+共享 `config/ops.conf` 一处配置。覆盖 **20 个功能模块** —— 从基础安全加固、
 运行环境部署，到系统监控、进程/服务/日志/安全/网络/磁盘诊断、更新检查、配置备份、性能调优，
 再到全量报告和 Mem0 服务级检查。
 
@@ -42,6 +42,8 @@ vps_sysops/
 │   ├── 15_tune.sh           # 性能调优建议
 │   ├── 16_report.sh         # 全量报告（汇聚全部模块，输出到 REPORT_DIR）
 │   ├── mem0.sh              # Mem0 服务状态/健康/日志/显式 smoke
+│   ├── agent-ctl            # profile-driven Hermes Agent 服务控制实现
+│   ├── agent_ctl.sh         # Hermes Agent ops 交互菜单适配层
 │   └── mem0_backup.sh       # Mem0 PostgreSQL 低资源备份/校验/恢复 smoke
 ├── system/                 # 通用及 GCP 专属的可复现系统配置、Tailscale ACL
 │   └── bin/ops              # 注册到 /usr/local/bin/ops 的全局入口
@@ -78,7 +80,8 @@ vps_sysops/
 | 16 | — | 交互式依次运行所有模块 | 部分 |
 | 17 | `14_web_stack.sh` | x-ui/Nginx/Let’s Encrypt Web 栈 | 是 |
 | 18 | `mem0.sh` | Mem0 API/Dashboard/Compose 服务级检查 | 否（本机 logs 需 Docker 权限） |
-| 19 | `mem0_backup.sh` | Mem0 PostgreSQL dump、校验和、临时库恢复 smoke | 是（AWS profile） |
+| — | `mem0_backup.sh` | Mem0 PostgreSQL dump、校验和、临时库恢复 smoke | 是（AWS profile） |
+| 19 | `agent_ctl.sh` | profile-driven Hermes Agent 服务管理 | 否（system scope 启停由 agent-ctl 内部 sudo） |
 
 > 说明：模块编号沿用历史序号（06 在 07 前、13 后是 15、报告为 16），菜单已按 `scripts/` 实际文件名映射，新增脚本请勿重排既有编号。
 
@@ -404,6 +407,21 @@ sudo VPS_PROFILE=aws bash scripts/mem0_backup.sh restore-smoke --yes --format js
 
 全局命令 `/usr/local/bin/ops` 是轻量启动器，只定位本机 vps_sysops 目录并执行
 `ops.sh`，不驻留进程、不复制配置和凭据。
+
+## Hermes Agent 服务管理
+
+启用 Agent 的 profile 会在 `ops` 菜单显示第 19 项。仓库内的
+`scripts/agent-ctl` 根据 profile 管理 system-level 或 user-level systemd 服务；
+`agent_ctl.sh` 只负责交互菜单适配。也可以直接调用：
+
+```bash
+bash scripts/agent_ctl.sh status
+bash scripts/agent_ctl.sh restart
+bash scripts/agent_ctl.sh log 100
+```
+
+新增 VPS 时，在 `config/hosts/<profile>.conf` 设置 `AGENT_ENABLED`、
+`AGENT_SERVICE`、`AGENT_SCOPE`、`AGENT_USER` 和可选的 `AGENT_VENV`，即可复用该入口。
 
 ## 注意事项
 
