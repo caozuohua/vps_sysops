@@ -34,7 +34,8 @@ vps_sysops/
 │   ├── 14_web_stack.sh      # x-ui/Nginx/Let’s Encrypt（GCP Ubuntu）
 │   ├── 15_tune.sh           # 性能调优建议
 │   ├── 16_report.sh         # 全量报告（汇聚全部模块，输出到 REPORT_DIR）
-│   └── mem0.sh              # Mem0 服务状态/健康/日志/显式 smoke
+│   ├── mem0.sh              # Mem0 服务状态/健康/日志/显式 smoke
+│   └── mem0_backup.sh       # Mem0 PostgreSQL 低资源备份/校验/恢复 smoke
 ├── system/                 # 通用及 GCP 专属的可复现系统配置、Tailscale ACL
 ├── tests/                  # Shell/profile/Python 与 SQLite 备份 smoke tests
 └── README.md               # 本文档
@@ -69,6 +70,7 @@ vps_sysops/
 | 16 | — | 交互式依次运行所有模块 | 部分 |
 | 17 | `14_web_stack.sh` | x-ui/Nginx/Let’s Encrypt Web 栈 | 是 |
 | 18 | `mem0.sh` | Mem0 API/Dashboard/Compose 服务级检查 | 否（本机 logs 需 Docker 权限） |
+| 19 | `mem0_backup.sh` | Mem0 PostgreSQL dump、校验和、临时库恢复 smoke | 是（AWS profile） |
 
 > 说明：模块编号沿用历史序号（06 在 07 前、13 后是 15、报告为 16），菜单已按 `scripts/` 实际文件名映射，新增脚本请勿重排既有编号。
 
@@ -299,14 +301,14 @@ sudo bash tests/backup_smoke.sh
 
 ## 定时任务建议
 
-健康检查每 5 分钟、备份每天凌晨、全量报告每小时：
+生产主机使用 systemd timer 限制资源；下面的 cron 仅作为手工部署到其他主机时的参考：
 
 ```bash
  sudo crontab -e
 ```
 
 ```cron
-# 每 5 分钟健康检查（含 Hermes 网关存活 + CPU/内存/磁盘阈值，异常飞书告警）
+# 每 5 分钟健康检查（参考；正式三台 VPS 使用 vps-ops-monitor-*.timer）
 */5 * * * * VPS_PROFILE=gcp /home/youruser/vps_sysops/scripts/03_monitor.sh >> /var/log/vps-ops-monitor.log 2>&1
 
 # 每天凌晨 3 点备份关键配置
@@ -343,6 +345,10 @@ sudo bash tests/backup_smoke.sh
 | `MEM0_AUTH_FILE` | Mem0 smoke 使用的主机本地认证文件 | `""` |
 | `MEM0_MONITOR_ENABLED` | `03_monitor.sh` 是否检查 Mem0 API/Dashboard | `true` |
 | `MEM0_SMOKE_USER_ID` / `MEM0_SMOKE_AGENT_ID` | smoke 临时记录的隔离身份 | `sysops-smoke` / `vps-sysops-smoke` |
+| `MEM0_BACKUP_ENABLED` | 是否启用 Mem0 PostgreSQL 备份 | `false`（AWS 为 `true`） |
+| `MEM0_BACKUP_DEST` | Mem0 dump 本机目录 | `/var/backups/vps-sysops/mem0` |
+| `MEM0_BACKUP_RETAIN_DAYS` | Mem0 dump 保留天数 | `7` |
+| `MEM0_BACKUP_TIMEOUT` / `MEM0_BACKUP_DISK_LIMIT` | 单次超时秒数 / 磁盘使用率上限 | `900` / `90` |
 
 ## 权限与依赖
 
@@ -368,6 +374,18 @@ bash scripts/mem0.sh smoke --format json
 
 AWS profile 的 smoke 认证文件默认为 `/etc/vps-sysops/mem0.env`，应由管理员在主机上
 创建并设置为 `0600`，不得提交到仓库。普通状态和健康检查不需要认证文件。
+
+Mem0 PostgreSQL 备份仅在 AWS 启用：`vps-ops-backup-aws.timer` 每天凌晨运行一次，
+使用 `custom` 格式、`pg_dump` 流式输出、`CPUQuota=25%`、`MemoryMax=256M` 和
+磁盘使用率阈值；GCP/Azure 的 1GB VPS 不安排备份任务。手工验证：
+
+```bash
+sudo VPS_PROFILE=aws bash scripts/mem0_backup.sh backup --format json
+sudo VPS_PROFILE=aws bash scripts/mem0_backup.sh verify --format json
+sudo VPS_PROFILE=aws bash scripts/mem0_backup.sh restore-smoke --yes --format json
+```
+
+`restore-smoke` 只恢复到临时数据库并随后删除，不会覆盖生产库。
 
 ## 注意事项
 

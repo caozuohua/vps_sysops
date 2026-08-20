@@ -1,0 +1,20 @@
+[Unit]
+Description=VPS Sysops lightweight monitor (GCP)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=caozuohua99
+WorkingDirectory=/opt/vps_sysops
+Environment=VPS_PROFILE=gcp
+ExecStart=/usr/bin/bash /opt/vps_sysops/scripts/03_monitor.sh
+TimeoutStartSec=30s
+CPUQuota=10%
+MemoryMax=128M
+TasksMax=32
+Nice=10
+IOSchedulingClass=idle
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only

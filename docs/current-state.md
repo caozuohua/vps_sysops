@@ -72,6 +72,15 @@ Windows 节点为 `desktop-97l4bfc` / `100.124.35.84`；手机节点为
   `/opt/mem0/server/docker-compose.yaml`；`scripts/mem0.sh status`、
   `health`、`smoke` 均已验证。专用 smoke 认证文件位于
   `/etc/vps-sysops/mem0.env`，权限为 `0600`，不进入仓库。
+- 三台 VPS 已安装轻量 systemd monitor timer：GCP
+  `vps-ops-monitor-gcp.timer`、Azure `vps-ops-monitor-azure.timer`、AWS
+  `vps-ops-monitor-aws.timer`，每 5 分钟运行一次 oneshot，限制为
+  `CPUQuota=10%`、`MemoryMax=128M`、`Nice=10`，不常驻后台进程。
+- 仅 AWS 启用 `vps-ops-backup-aws.timer`，每天凌晨随机延迟执行一次 Mem0
+  PostgreSQL custom-format dump，写入 `/var/backups/vps-sysops/mem0`，限制为
+  `CPUQuota=25%`、`MemoryMax=256M`、`Nice=19`、I/O idle，并保留 7 天。
+  备份脚本会检查磁盘使用率、SHA-256 和 `pg_restore -l`；`restore-smoke`
+  只操作临时数据库。GCP/Azure 不安排这项任务，以控制 1GB VPS 资源占用。
 
 ## Hermes 共享记忆接入
 
@@ -142,6 +151,9 @@ Windows 节点为 `desktop-97l4bfc` / `100.124.35.84`；手机节点为
 - 日常使用 `VPS_PROFILE=gcp|azure|aws scripts/04_backup.sh`：归档以 `0600`
   权限写入 `/var/backups/vps-sysops`，并先对 newAPI、x-ui 和 A2A SQLite
   数据库执行在线 `.backup` 与完整性检查。
+- Mem0 PostgreSQL 使用 `scripts/mem0_backup.sh` 单独备份；只在 AWS 的 systemd
+  timer 中启用，不在 GCP/Azure 上增加后台备份负载。备份文件为 `0600`，默认
+  保留 7 天；定时服务使用 flock 防止重入。
 - 本机备份不等于异地灾备；若以后接受额外费用，应重新评估加密异地备份。
 
 ## 例行验证
@@ -155,6 +167,7 @@ VPS_PROFILE=azure bash scripts/11_network.sh
 VPS_PROFILE=aws bash scripts/03_monitor.sh
 VPS_PROFILE=aws bash scripts/11_network.sh
 bash scripts/mem0.sh status --format json
+sudo VPS_PROFILE=aws bash scripts/mem0_backup.sh verify --format json
 ```
 
 修改 ACL、云防火墙、nginx stream、x-ui/Xray 端口或 newAPI 镜像 tag 后，必须同步

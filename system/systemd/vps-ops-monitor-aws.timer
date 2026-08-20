@@ -1,0 +1,12 @@
+[Unit]
+Description=Run VPS Sysops lightweight monitor every five minutes (AWS)
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+RandomizedDelaySec=45s
+Persistent=true
+Unit=vps-ops-monitor-aws.service
+
+[Install]
+WantedBy=timers.target

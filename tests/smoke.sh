@@ -10,6 +10,7 @@ bash -n "${ROOT_DIR}/ops.sh" "${ROOT_DIR}/config/ops.conf" \
   "${ROOT_DIR}/config/hosts/gcp.conf" "${ROOT_DIR}/config/hosts/azure.conf" \
   "${ROOT_DIR}/config/hosts/aws.conf"
 bash "${ROOT_DIR}/scripts/mem0.sh" --help >/dev/null
+bash "${ROOT_DIR}/scripts/mem0_backup.sh" --help >/dev/null
 
 VPS_PROFILE=gcp bash -c '
   source "$1/config/ops.conf"
@@ -30,6 +31,8 @@ VPS_PROFILE=aws bash -c '
   [[ "$MEM0_EXPECT_LOCAL_COMPOSE" == true ]]
   [[ "$MEM0_API_BASE_URL" == http://100.112.88.72:8888 ]]
   [[ "$MEM0_MONITOR_ENABLED" == true ]]
+  [[ "$MEM0_BACKUP_ENABLED" == true ]]
+  [[ "$MEM0_BACKUP_COMPOSE_FILE" == docker-compose.yaml ]]
 ' _ "${ROOT_DIR}"
 
 VPS_PROFILE=azure bash -c '
@@ -39,6 +42,7 @@ VPS_PROFILE=azure bash -c '
   [[ "$TAILSCALE_IP" == 100.115.42.83 ]]
   [[ "$MONITOR_USER" == caozuohua ]]
   [[ "$TAILSCALE_DENY_TARGETS" == *100.101.90.114:50404* ]]
+  [[ "$MEM0_BACKUP_ENABLED" == false ]]
 ' _ "${ROOT_DIR}"
 
 grep -q '"desktop": "100.124.35.84"' "${ROOT_DIR}/system/tailscale/grants.hujson"
