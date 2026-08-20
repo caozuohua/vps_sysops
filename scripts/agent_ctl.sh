@@ -80,7 +80,6 @@ case "${1:-menu}" in
   menu) menu ;;
   -h|--help) usage ;;
   status|start|stop|restart|log|logf|venv|help)
-    shift || true
     run_agent_ctl "$@"
     ;;
   *)
