@@ -49,6 +49,13 @@ STATE_DIR = Path(os.environ.get("A2A_STATE_DIR", "./state"))
 HERMES_EXEC = os.environ.get("A2A_HERMES_EXEC", "hermes")
 HERMES_ARGS = json.loads(os.environ.get("A2A_HERMES_ARGS", "[]"))
 ENABLE_TOOLS = os.environ.get("A2A_ENABLE_TOOLS", "false").lower() == "true"
+QPC_AUTOROUTE = os.environ.get("A2A_QPC_AUTOROUTE", "false").lower() == "true"
+QPC_TOOLSETS = tuple(x.strip() for x in os.environ.get("A2A_QPC_TOOLSETS", "terminal,skills").split(",") if x.strip())
+QPC_INSTRUCTIONS_FILE = os.environ.get("A2A_QPC_INSTRUCTIONS_FILE", "")
+try:
+    QPC_INSTRUCTIONS = Path(QPC_INSTRUCTIONS_FILE).read_text(encoding="utf-8") if QPC_INSTRUCTIONS_FILE else ""
+except OSError:
+    QPC_INSTRUCTIONS = ""
 try:
     TOOL_POLICY = json.loads(os.environ.get("A2A_TOOL_POLICY", '{"default":{"toolsets":[]}}'))
 except json.JSONDecodeError:
@@ -347,6 +354,14 @@ def allowed_toolsets(role: str, requested: list[str]) -> tuple[bool, list[str]]:
     return set(requested).issubset(allowed), sorted(allowed)
 
 
+def is_qpc_request(message: str) -> bool:
+    """Recognize the explicit QPC operation intent from an A2A request."""
+    return bool(re.search(
+        r"(?:QPC|qpc|多维表格|bitable|lark\s+bitable|飞书知识库|记入知识库|写入知识库|保存到知识库)",
+        message,
+    ))
+
+
 def build_command(task: dict, prompt: str) -> list[str]:
     args = list(HERMES_ARGS)
     if task.get("toolsets") and ENABLE_TOOLS:
@@ -372,6 +387,8 @@ def run_task(task: dict) -> None:
     send_callback(task)
     history = load_context(task["context_id"])
     prompt = "You are handling a private agent-to-agent task. Answer directly and concisely.\n"
+    if task.get("qpc_mode") and QPC_INSTRUCTIONS:
+        prompt += "QPC operation mode is active. Follow these instructions exactly:\n" + QPC_INSTRUCTIONS + "\n"
     if history:
         prompt += "Recent context:\n" + "\n".join(f"{x['role']}: {x['content']}" for x in history) + "\n"
     prompt += f"Latest request:\n{task['message']}\n"
@@ -448,6 +465,12 @@ def submit_task(body: dict) -> tuple[dict | None, str | None]:
     toolsets = body.get("toolsets", [])
     if not isinstance(toolsets, list) or any(not isinstance(x, str) for x in toolsets):
         return None, "invalid_toolsets"
+    qpc_mode = QPC_AUTOROUTE and is_qpc_request(message)
+    if qpc_mode:
+        # The peer MCP adapter intentionally does not forward toolsets.  For an
+        # explicit QPC request, grant only the narrow toolset pair needed to
+        # load the QPC skill and run its authenticated write procedure.
+        toolsets = sorted(set(toolsets).union(QPC_TOOLSETS))
     accepted, allowed = allowed_toolsets(role, toolsets)
     if not accepted:
         return None, "toolset_not_allowed:" + ",".join(allowed)
@@ -462,6 +485,7 @@ def submit_task(body: dict) -> tuple[dict | None, str | None]:
     task = {
         "id": str(uuid.uuid4()), "context_id": context_id, "status": "submitted",
         "message": message, "role": role, "toolsets": toolsets, "callback_url": callback_url,
+        "qpc_mode": qpc_mode,
         "created_at": now(), "updated_at": now(), "artifacts": [],
     }
     save_task(task)
@@ -505,8 +529,13 @@ class Handler(BaseHTTPRequestHandler):
                 "security": [{"bearerAuth": []}],
                 "defaultInputModes": ["text/plain", "application/json"],
                 "defaultOutputModes": ["text/plain", "application/json"],
-                "skills": [{"id": "hermes-delegation", "name": "Hermes delegated task",
-                            "description": "Run a bounded task through Hermes", "tags": ["research", "coding"]}],
+                "skills": [
+                    {"id": "hermes-delegation", "name": "Hermes delegated task",
+                     "description": "Run a bounded task through Hermes", "tags": ["research", "coding"]},
+                    {"id": "qpc-bitable", "name": "QPC Bitable operations",
+                     "description": "Read and write the user's QPC Lark Bitable using the fixed four-field schema; explicit QPC requests are routed through the dedicated operation mode.",
+                     "tags": ["qpc", "bitable", "lark", "knowledge-base"]},
+                ],
             })
             return
         prefix = "/a2a/v1/tasks/"
