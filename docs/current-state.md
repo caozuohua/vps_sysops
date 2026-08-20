@@ -24,6 +24,8 @@ Windows 节点为 `desktop-97l4bfc` / `100.124.35.84`；手机节点为
   `DOCKER-USER` 阻止直接访问容器端口 `3000`。
 - newAPI 只发布到 `127.0.0.1:3000`；A2A 只监听
   `100.101.90.114:8765`。
+- `/opt/vps_sysops` 已部署 Mem0 服务级运维入口；GCP profile 通过 Tailscale
+  检查 AWS Mem0 API，系统级 Hermes/A2A 服务保持 active。
 
 ### Azure
 
@@ -41,6 +43,8 @@ Windows 节点为 `desktop-97l4bfc` / `100.124.35.84`；手机节点为
   但只有 tailnet ACL 允许的节点可访问。
 - 旧 VM `az-vps`、资源组 `az-vps_group` 及旧公网 IP 已于 2026-08-10
   永久删除，不再属于当前拓扑。
+- `/home/caozuohua/vps_sysops` 已部署 Mem0 服务级运维入口；Hermes 和用户级
+  A2A 服务保持 active，A2A `/healthz` 实测返回 HTTP 200。
 
 ### AWS
 
@@ -64,6 +68,10 @@ Windows 节点为 `desktop-97l4bfc` / `100.124.35.84`；手机节点为
   admin/API key bootstrap 已完成。Tailscale ACL 已发布并包含 GCP/Azure 到 AWS
   的 TCP `8888`；从两台 Hermes 主机实测 API 认证、读写和跨主机检索均返回
   HTTP 200。
+- `/opt/vps_sysops` 已部署并按 AWS Compose 实际路径配置为
+  `/opt/mem0/server/docker-compose.yaml`；`scripts/mem0.sh status`、
+  `health`、`smoke` 均已验证。专用 smoke 认证文件位于
+  `/etc/vps-sysops/mem0.env`，权限为 `0600`，不进入仓库。
 
 ## Hermes 共享记忆接入
 
@@ -76,6 +84,8 @@ Windows 节点为 `desktop-97l4bfc` / `100.124.35.84`；手机节点为
   回滚副本；两台 Hermes 服务均已重启并读取到自托管 provider 配置。
 - 双向临时 smoke test 已完成：GCP 写入由 Azure 检索、Azure 写入由 GCP 检索，
   两条临时记录均已删除，清理后的标记检索结果为 `0`。
+- 三台 VPS 的 `vps_sysops` Mem0 smoke 均通过：临时写入、检索、删除均返回
+  HTTP 200；三台的 `03_monitor.sh` 均返回“状态正常”。
 
 ## Tailscale ACL
 
