@@ -308,6 +308,24 @@ SMOKE_DIR=""
 SMOKE_ID=""
 SMOKE_DELETED=false
 
+read_smoke_auth_value() {
+  local source_file="$1" name="$2"
+  local reader=(awk)
+  if [[ ! -r "${source_file}" ]]; then
+    command -v sudo >/dev/null 2>&1 || return 1
+    sudo -n test -r "${source_file}" >/dev/null 2>&1 || return 1
+    reader=(sudo -n awk)
+  fi
+  "${reader[@]}" -v name="${name}" '
+    index($0, name "=") == 1 {
+      sub(/^[^=]*=/, "")
+      sub(/\r$/, "")
+      if ($0 ~ /^".*"$/) { sub(/^"/, ""); sub(/"$/, "") }
+      print
+      exit
+    }' "${source_file}"
+}
+
 smoke_cleanup() {
   if [[ -n "${SMOKE_ID}" && "${SMOKE_DELETED}" != "true" && -n "${SMOKE_AUTH_VALUE:-}" ]]; then
     curl --connect-timeout "${MEM0_SMOKE_TIMEOUT}" --max-time "${MEM0_SMOKE_TIMEOUT}" \
@@ -343,15 +361,8 @@ run_smoke() {
   p=MEM0; q=API; r=KEY
   auth_name="${p}_${q}_${r}"
   auth_value=""
-  if [[ -r "${MEM0_AUTH_FILE}" ]]; then
-    auth_value="$(awk -v name="${auth_name}" '
-      index($0, name "=") == 1 {
-        sub(/^[^=]*=/, "")
-        sub(/\r$/, "")
-        if ($0 ~ /^".*"$/) { sub(/^"/, ""); sub(/"$/, "") }
-        print
-        exit
-      }' "${MEM0_AUTH_FILE}")"
+  if [[ -n "${MEM0_AUTH_FILE}" ]]; then
+    auth_value="$(read_smoke_auth_value "${MEM0_AUTH_FILE}" "${auth_name}" || true)"
   fi
   if [[ -z "${auth_value}" ]]; then
     smoke_ok=false
