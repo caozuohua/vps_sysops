@@ -74,10 +74,10 @@ Windows 节点为 `desktop-97l4bfc` / `100.124.35.84`；手机节点为
   `/etc/vps-sysops/mem0.env`，权限为 `0600`，不进入仓库。
 - 三台 VPS 均已注册 `/usr/local/bin/ops` 全局入口；它只转发到本机
   `vps_sysops/ops.sh`，不启动常驻进程，也不复制凭据。
-- GCP 的 `ops` 菜单增加 Hermes Agent 服务管理入口（19），优先调用仓库内的
-  `scripts/agent-ctl`，缺失时回退到 `/usr/local/bin/agent-ctl`，管理
+- GCP 和 Azure 的 `ops` 菜单均增加 Hermes Agent 服务管理入口（19）。仓库内的
+  `scripts/agent-ctl` 按 profile 管理 GCP 的 system-level、Azure 的 user-level
   `hermes-gateway.service`，支持状态、启动、停止、重启、日志和虚拟环境检查；
-  Azure/AWS 不显示该 profile 专属菜单项。
+  未启用 `AGENT_ENABLED` 的 profile 不显示该菜单项。
 - 三台 VPS 已安装轻量 systemd monitor timer：GCP
   `vps-ops-monitor-gcp.timer`、Azure `vps-ops-monitor-azure.timer`、AWS
   `vps-ops-monitor-aws.timer`，每 5 分钟运行一次 oneshot，限制为

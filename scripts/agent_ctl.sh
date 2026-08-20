@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# agent_ctl.sh —— 将 GCP Hermes Lite agent-ctl 接入 ops 菜单
+# agent_ctl.sh —— 将 profile-driven agent-ctl 接入 ops 菜单
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,7 +33,7 @@ resolve_agent_ctl() {
     [[ -x "${AGENT_CTL}" ]] || { echo "找不到 agent-ctl: ${AGENT_CTL}" >&2; return 1; }
   else
     command -v "${AGENT_CTL}" >/dev/null 2>&1 || {
-      echo "当前主机未安装 agent-ctl（此入口主要用于 GCP Hermes Lite）" >&2
+      echo "当前 profile 未找到可用的 agent-ctl 后端" >&2
       return 1
     }
   fi
