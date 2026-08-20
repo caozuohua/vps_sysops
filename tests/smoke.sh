@@ -12,6 +12,7 @@ bash -n "${ROOT_DIR}/ops.sh" "${ROOT_DIR}/config/ops.conf" \
 bash -n "${ROOT_DIR}/system/bin/ops"
 bash "${ROOT_DIR}/scripts/mem0.sh" --help >/dev/null
 bash "${ROOT_DIR}/scripts/mem0_backup.sh" --help >/dev/null
+bash "${ROOT_DIR}/scripts/agent_ctl.sh" --help >/dev/null
 
 VPS_PROFILE=gcp bash -c '
   source "$1/config/ops.conf"
