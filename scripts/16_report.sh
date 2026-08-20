@@ -71,6 +71,14 @@ cmd_report() {
  run_module "系统更新检查"   13_updates       yes
   run_module "Web 栈状态"      14_web_stack     yes
 
+  {
+    echo ""
+    echo "════════════════════════════════════════════════"
+    echo "  Mem0 服务状态"
+    echo "════════════════════════════════════════════════"
+    bash "${SCRIPT_DIR}/mem0.sh" status 2>&1 || echo "[WARN] mem0 status 执行出错（退出码 $?）"
+  } 2>&1 | tee -a "$REPORT_FILE"
+
   echo ""
   log "✅ 全量报告已保存至: ${REPORT_FILE}"
   echo "   大小: $(ls -lh "$REPORT_FILE" | awk '{print $5}')"

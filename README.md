@@ -2,9 +2,9 @@
 
 一套面向 Ubuntu VPS 的生产级 Shell 运维工具包，按**模块化架构**组织：
 `ops.sh` 是统一交互入口，各功能拆到 `scripts/` 下独立、可单独调用的脚本，
-共享 `config/ops.conf` 一处配置。覆盖 **17 个功能模块** —— 从基础安全加固、
+共享 `config/ops.conf` 一处配置。覆盖 **18 个功能模块** —— 从基础安全加固、
 运行环境部署，到系统监控、进程/服务/日志/安全/网络/磁盘诊断、更新检查、配置备份、性能调优，
-再到全量报告一键生成。
+再到全量报告和 Mem0 服务级检查。
 
 ## 架构规范
 
@@ -14,7 +14,7 @@ vps_sysops/
 ├── a2a-bridge/             # 两台 Hermes 间的私有 A2A 桥接与 MCP 适配器
 ├── config/
 │   ├── ops.conf            # 通用默认配置与主机 profile 自动选择
-│   └── hosts/              # GCP / Azure 非敏感主机配置
+│   └── hosts/              # GCP / Azure / AWS 非敏感主机配置
 ├── docs/
 │   └── current-state.md    # 已验证的公网、Tailscale、端口与服务拓扑
 ├── scripts/                # 各功能模块（独立可运行，统一 source ../config/ops.conf）
@@ -33,7 +33,8 @@ vps_sysops/
 │   ├── 13_updates.sh        # 系统更新检查 & 安全补丁
 │   ├── 14_web_stack.sh      # x-ui/Nginx/Let’s Encrypt（GCP Ubuntu）
 │   ├── 15_tune.sh           # 性能调优建议
-│   └── 16_report.sh         # 全量报告（汇聚全部模块，输出到 REPORT_DIR）
+│   ├── 16_report.sh         # 全量报告（汇聚全部模块，输出到 REPORT_DIR）
+│   └── mem0.sh              # Mem0 服务状态/健康/日志/显式 smoke
 ├── system/                 # 通用及 GCP 专属的可复现系统配置、Tailscale ACL
 ├── tests/                  # Shell/profile/Python 与 SQLite 备份 smoke tests
 └── README.md               # 本文档
@@ -67,6 +68,7 @@ vps_sysops/
 | 15 | `16_report.sh` | 全量报告输出到 `REPORT_DIR` | 部分 |
 | 16 | — | 交互式依次运行所有模块 | 部分 |
 | 17 | `14_web_stack.sh` | x-ui/Nginx/Let’s Encrypt Web 栈 | 是 |
+| 18 | `mem0.sh` | Mem0 API/Dashboard/Compose 服务级检查 | 否（本机 logs 需 Docker 权限） |
 
 > 说明：模块编号沿用历史序号（06 在 07 前、13 后是 15、报告为 16），菜单已按 `scripts/` 实际文件名映射，新增脚本请勿重排既有编号。
 
@@ -81,9 +83,9 @@ vps_sysops/
    chmod +x ops.sh scripts/*.sh
    ```
 
-2. 已知主机会按 hostname 自动选择 `config/hosts/gcp.conf` 或
-   `config/hosts/azure.conf`。其他主机编辑 `config/ops.conf`，或用
-   `VPS_PROFILE=gcp|azure` 显式选择配置。
+2. 已知主机会按 hostname 自动选择 `config/hosts/gcp.conf`、
+   `config/hosts/azure.conf` 或 `config/hosts/aws.conf`。其他主机编辑
+   `config/ops.conf`，或用 `VPS_PROFILE=gcp|azure|aws` 显式选择配置。
 
 3. 运行菜单（交互式）：
 
@@ -98,6 +100,7 @@ vps_sysops/
    sudo bash scripts/01_harden.sh
    bash scripts/07_resources.sh
    bash scripts/05_overview.sh --help    # 每个脚本都支持 -h/--help
+   bash scripts/mem0.sh status --format json
    ```
 
    > **统一约定**：`ops.sh` 与所有 `scripts/*.sh` 均支持 `-h` / `--help` 打印用法后立即退出；
@@ -321,7 +324,7 @@ sudo bash tests/backup_smoke.sh
 | 变量 | 说明 | 默认 |
 |------|------|------|
 | `SSH_PORT` | SSH 端口（改非默认前先确认连通） | `22` |
-| `VPS_PROFILE` | 主机配置；可用 `gcp` / `azure`，空值时按 hostname 识别 | `""` |
+| `VPS_PROFILE` | 主机配置；可用 `gcp` / `azure` / `aws`，空值时按 hostname 识别 | `""` |
 | `VPS_PROFILE_FILE` | 可选的外部 profile 绝对路径，优先于内置 profile | `""` |
 | `EXTRA_ALLOW_PORTS` | 防火墙额外放行端口，逗号分隔 | `""` |
 | `MONITOR_SERVICES` | 健康检查的服务名（空格分隔） | `hermes-gateway.service` |
@@ -335,6 +338,11 @@ sudo bash tests/backup_smoke.sh
 | `TAILSCALE_ALLOW_TARGETS` / `TAILSCALE_DENY_TARGETS` | `11_network.sh` 的 ACL 探测矩阵 | `""` |
 | `REPORT_DIR` | 全量报告输出目录 | `/tmp/vps-ops-reports` |
 | `FEISHU_WEBHOOK` | 飞书机器人 Webhook（留空仅本地输出） | `""` |
+| `MEM0_API_BASE_URL` / `MEM0_DASHBOARD_URL` | Mem0 API 与 Dashboard 地址 | AWS Tailscale 地址 |
+| `MEM0_EXPECT_LOCAL_COMPOSE` | 当前 profile 是否必须存在本机 Mem0 Compose | `false` |
+| `MEM0_AUTH_FILE` | Mem0 smoke 使用的主机本地认证文件 | `""` |
+| `MEM0_MONITOR_ENABLED` | `03_monitor.sh` 是否检查 Mem0 API/Dashboard | `true` |
+| `MEM0_SMOKE_USER_ID` / `MEM0_SMOKE_AGENT_ID` | smoke 临时记录的隔离身份 | `sysops-smoke` / `vps-sysops-smoke` |
 
 ## 权限与依赖
 
@@ -344,6 +352,22 @@ sudo bash tests/backup_smoke.sh
   `13_updates` / `16_report`（security、updates 子项）
 
 可选工具（`iostat`/`smartctl`/`dig`/`fail2ban-client`/`ufw`/`bc`）脚本会自动检测并优雅跳过。
+
+## Mem0 服务级运维
+
+`scripts/mem0.sh` 只管理 Mem0 服务，不负责用户画像、任务或对话记忆的业务写入。
+`status`、`health` 和 `logs` 可被 `luck-agent` 的固定 allowlist 调用；`smoke` 是
+显式的临时写入/检索/删除验证，失败退出时会通过 `EXIT` trap 尽力清理记录。
+
+```bash
+bash scripts/mem0.sh status
+bash scripts/mem0.sh health --format json
+bash scripts/mem0.sh logs --tail 50
+bash scripts/mem0.sh smoke --format json
+```
+
+AWS profile 的 smoke 认证文件默认为 `/etc/vps-sysops/mem0.env`，应由管理员在主机上
+创建并设置为 `0600`，不得提交到仓库。普通状态和健康检查不需要认证文件。
 
 ## 注意事项
 
