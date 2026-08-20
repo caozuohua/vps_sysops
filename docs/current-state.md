@@ -72,6 +72,8 @@ Windows 节点为 `desktop-97l4bfc` / `100.124.35.84`；手机节点为
   `/opt/mem0/server/docker-compose.yaml`；`scripts/mem0.sh status`、
   `health`、`smoke` 均已验证。专用 smoke 认证文件位于
   `/etc/vps-sysops/mem0.env`，权限为 `0600`，不进入仓库。
+- 三台 VPS 均已注册 `/usr/local/bin/ops` 全局入口；它只转发到本机
+  `vps_sysops/ops.sh`，不启动常驻进程，也不复制凭据。
 - 三台 VPS 已安装轻量 systemd monitor timer：GCP
   `vps-ops-monitor-gcp.timer`、Azure `vps-ops-monitor-azure.timer`、AWS
   `vps-ops-monitor-aws.timer`，每 5 分钟运行一次 oneshot，限制为

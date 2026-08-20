@@ -37,6 +37,7 @@ vps_sysops/
 │   ├── mem0.sh              # Mem0 服务状态/健康/日志/显式 smoke
 │   └── mem0_backup.sh       # Mem0 PostgreSQL 低资源备份/校验/恢复 smoke
 ├── system/                 # 通用及 GCP 专属的可复现系统配置、Tailscale ACL
+│   └── bin/ops              # 注册到 /usr/local/bin/ops 的全局入口
 ├── tests/                  # Shell/profile/Python 与 SQLite 备份 smoke tests
 └── README.md               # 本文档
 ```
@@ -103,6 +104,13 @@ vps_sysops/
    bash scripts/07_resources.sh
    bash scripts/05_overview.sh --help    # 每个脚本都支持 -h/--help
    bash scripts/mem0.sh status --format json
+   ```
+
+   三台 VPS 已注册全局入口，SSH 登录后可直接运行：
+
+   ```bash
+   ops              # 交互式菜单
+   ops --help       # 查看入口帮助
    ```
 
    > **统一约定**：`ops.sh` 与所有 `scripts/*.sh` 均支持 `-h` / `--help` 打印用法后立即退出；
@@ -386,6 +394,9 @@ sudo VPS_PROFILE=aws bash scripts/mem0_backup.sh restore-smoke --yes --format js
 ```
 
 `restore-smoke` 只恢复到临时数据库并随后删除，不会覆盖生产库。
+
+全局命令 `/usr/local/bin/ops` 是轻量启动器，只定位本机 vps_sysops 目录并执行
+`ops.sh`，不驻留进程、不复制配置和凭据。
 
 ## 注意事项
 
