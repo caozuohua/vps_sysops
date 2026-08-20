@@ -42,7 +42,8 @@ vps_sysops/
 │   ├── 15_tune.sh           # 性能调优建议
 │   ├── 16_report.sh         # 全量报告（汇聚全部模块，输出到 REPORT_DIR）
 │   ├── mem0.sh              # Mem0 服务状态/健康/日志/显式 smoke
-│   ├── agent_ctl.sh         # GCP Hermes Agent 服务管理（委托 agent-ctl）
+│   ├── agent-ctl            # Hermes Lite Agent 服务控制实现
+│   ├── agent_ctl.sh         # GCP Hermes Agent ops 交互菜单适配层
 │   └── mem0_backup.sh       # Mem0 PostgreSQL 低资源备份/校验/恢复 smoke
 ├── system/                 # 通用及 GCP 专属的可复现系统配置、Tailscale ACL
 │   └── bin/ops              # 注册到 /usr/local/bin/ops 的全局入口

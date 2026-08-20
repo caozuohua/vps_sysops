@@ -10,6 +10,7 @@ bash -n "${ROOT_DIR}/ops.sh" "${ROOT_DIR}/config/ops.conf" \
   "${ROOT_DIR}/config/hosts/gcp.conf" "${ROOT_DIR}/config/hosts/azure.conf" \
   "${ROOT_DIR}/config/hosts/aws.conf"
 bash -n "${ROOT_DIR}/system/bin/ops"
+bash -n "${ROOT_DIR}/scripts/agent-ctl"
 bash "${ROOT_DIR}/scripts/mem0.sh" --help >/dev/null
 bash "${ROOT_DIR}/scripts/mem0_backup.sh" --help >/dev/null
 bash "${ROOT_DIR}/scripts/agent_ctl.sh" --help >/dev/null

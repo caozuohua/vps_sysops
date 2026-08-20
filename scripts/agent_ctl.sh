@@ -2,7 +2,14 @@
 # agent_ctl.sh —— 将 GCP Hermes Lite agent-ctl 接入 ops 菜单
 set -euo pipefail
 
-AGENT_CTL="${AGENT_CTL:-agent-ctl}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -n "${AGENT_CTL:-}" ]]; then
+  AGENT_CTL="${AGENT_CTL}"
+elif [[ -x "${SCRIPT_DIR}/agent-ctl" ]]; then
+  AGENT_CTL="${SCRIPT_DIR}/agent-ctl"
+else
+  AGENT_CTL="agent-ctl"
+fi
 
 usage() {
   cat <<EOF
