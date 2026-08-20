@@ -125,6 +125,15 @@ COMPOSE_AVAILABLE=false
 COMPOSE_RUNNING=false
 COMPOSE_SERVICES=""
 COMPOSE_FILE_PATH="$(compose_file_path)"
+DOCKER_USE_SUDO=false
+
+docker_compose() {
+  if [[ "${DOCKER_USE_SUDO}" == "true" ]]; then
+    sudo -n docker compose "$@"
+  else
+    docker compose "$@"
+  fi
+}
 
 collect_compose() {
   COMPOSE_AVAILABLE=false
@@ -134,12 +143,19 @@ collect_compose() {
   if ! command -v docker >/dev/null 2>&1 || [[ ! -f "${COMPOSE_FILE_PATH}" ]]; then
     return 0
   fi
+  if docker info >/dev/null 2>&1; then
+    DOCKER_USE_SUDO=false
+  elif command -v sudo >/dev/null 2>&1 && sudo -n docker info >/dev/null 2>&1; then
+    DOCKER_USE_SUDO=true
+  else
+    return 0
+  fi
   COMPOSE_AVAILABLE=true
 
   COMPOSE_SERVICES="$(
     cd "${MEM0_COMPOSE_DIR}" &&
-    (docker compose -f "${COMPOSE_FILE_PATH}" ps --services --status running 2>/dev/null || \
-      docker compose -f "${COMPOSE_FILE_PATH}" ps --services --filter status=running 2>/dev/null || true)
+    (docker_compose -f "${COMPOSE_FILE_PATH}" ps --services --status running 2>/dev/null || \
+      docker_compose -f "${COMPOSE_FILE_PATH}" ps --services --filter status=running 2>/dev/null || true)
   )"
   if printf '%s\n' "${COMPOSE_SERVICES}" | grep -Fxq "${MEM0_COMPOSE_SERVICE}"; then
     COMPOSE_RUNNING=true
@@ -259,7 +275,7 @@ PY
 
   local log_file
   log_file="$(mktemp /tmp/vps-sysops-mem0-logs.XXXXXX)"
-  if ! (cd "${MEM0_COMPOSE_DIR}" && docker compose -f "${COMPOSE_FILE_PATH}" \
+  if ! (cd "${MEM0_COMPOSE_DIR}" && docker_compose -f "${COMPOSE_FILE_PATH}" \
       logs --no-color --tail "${MEM0_LOG_TAIL}" "${MEM0_COMPOSE_SERVICE}" >"${log_file}" 2>&1); then
     if [[ "${OUTPUT_FORMAT}" == "json" ]]; then
       python3 - "${log_file}" <<'PY'
