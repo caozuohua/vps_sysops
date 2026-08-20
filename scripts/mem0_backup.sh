@@ -169,7 +169,7 @@ create_pgfile() {
 dump_is_valid() {
   local path="$1"
   [[ -s "${path}" ]] || return 1
-  docker_exec -i "${CONTAINER_ID}" pg_restore -l - >/dev/null <"${path}"
+  docker_exec -i "${CONTAINER_ID}" pg_restore -l >/dev/null <"${path}"
 }
 
 latest_archive() {
@@ -269,7 +269,7 @@ case "${ACTION}" in
     docker_exec "${CONTAINER_ID}" createdb -U "${DB_USER}" "${temp_db}"
     restore_ok=false
     if timeout "${MEM0_BACKUP_TIMEOUT}" "${DOCKER_EXEC_PREFIX[@]}" -i "${CONTAINER_ID}" sh -c \
-      'f=PG; f="${f}PASSFILE"; env "$f=$1" pg_restore --exit-on-error --no-owner --no-acl -U "$2" -d "$3" -' \
+      'f=PG; f="${f}PASSFILE"; env "$f=$1" pg_restore --exit-on-error --no-owner --no-acl -U "$2" -d "$3"' \
       sh "${PGFILE_PATH}" "${DB_USER}" "${temp_db}" <"${ARCHIVE}"; then
       restore_ok=true
     fi
