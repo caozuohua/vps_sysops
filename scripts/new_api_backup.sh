@@ -51,7 +51,7 @@ verify_archive() {
   sha256sum -c "${archive}.sha256"
   local verify_dir
   verify_dir=$(mktemp -d /tmp/new-api-backup-verify.XXXXXX)
-  trap 'rm -rf -- "${verify_dir}"' RETURN
+  trap 'rm -rf -- "${verify_dir:-}"' RETURN
   tar -xzf "${archive}" -C "${verify_dir}"
   [[ -f "${verify_dir}/new-api/.env" ]] || { echo "archive missing .env" >&2; exit 1; }
   local snapshot="${verify_dir}/new-api/data/one-api.db.sqlite3"
@@ -80,7 +80,7 @@ backup() {
   stamp=$(date -u '+%Y%m%d_%H%M%S')
   archive="${NEW_API_BACKUP_DEST}/new-api_${stamp}.tar.gz"
   stage=$(mktemp -d "${NEW_API_BACKUP_DEST}/.stage_${stamp}_XXXXXX")
-  trap 'rm -rf -- "${stage}"' RETURN
+  trap 'rm -rf -- "${stage:-}"' RETURN
   mkdir -p "${stage}/new-api/data"
 
   snapshot="${stage}/new-api/data/one-api.db.sqlite3"
