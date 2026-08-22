@@ -105,6 +105,7 @@ backup() {
   tar -tzf "${archive}" >/dev/null
   sha256sum "${archive}" >"${archive}.sha256"
   chmod 600 "${archive}.sha256"
+  verify_archive "${archive}"
   find "${NEW_API_BACKUP_DEST}" -maxdepth 1 -name 'new-api_*.tar.gz' \
     -mtime "+${NEW_API_BACKUP_RETAIN_DAYS}" -delete
   find "${NEW_API_BACKUP_DEST}" -maxdepth 1 -name 'new-api_*.tar.gz.sha256' \
