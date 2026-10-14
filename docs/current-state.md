@@ -1,9 +1,19 @@
 # 当前 VPS 与网络状态
 
-最后核验：2026-08-20。本文只记录可公开的基础设施事实；密钥、Token、`.env`、
+最近运行核验：2026-10-14；旧拓扑条目未逐项复核，最新检查范围及漂移见
+`docs/health-review-2026-10-14.md`。本文只记录可公开的基础设施事实；密钥、Token、`.env`、
 x-ui 秘密路径、数据库和 Tailscale 状态文件不得提交到仓库。
 
 ## 主机清单
+
+2026-10-14：三台 VPS 和 Windows 本机的 Tailscale 均已更新至 `1.104.1`，
+升级后 SSH 和只读监控通过。GCP 使用官方 APT 源更新（现有 deb822 源布局不被
+`tailscale update` 识别）；Azure/AWS/Windows 使用官方自更新器。
+AWS 在同日降级准备清理中已删除 Luck Agent、Phoenix、实验项目、售前技能、博客
+和 GLM 配额任务，保留 Mem0、sysops 及 SSH/Tailscale/Codex 运维工具。
+OAuth Funnel 回调已撤下，Phoenix 6006/4317 UFW 规则已删除。
+详情见 `docs/aws-cleanup-2026-10-14.md`；该清理记录优先于当天较早的健康检查。
+AWS 公网 SSH 实测超时，不能再把下文历史“公网可用”当成当前应急路径。
 
 | 主机 | 云平台 / 系统 | 公网 IPv4 | Tailscale IPv4 | 管理入口 |
 |---|---|---|---|---|
