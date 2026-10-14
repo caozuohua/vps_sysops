@@ -16,7 +16,7 @@ def build_safe_env(user_env):
 
 user_env = {
     "A2A_REMOTE_URL": "http://100.101.90.114:8765/a2a",
-    "A2A_CALLBACK_URL": "http://100.87.159.14:8765/a2a/v1/events",
+    "A2A_CALLBACK_URL": "http://100.115.42.83:8765/a2a/v1/events",
     "A2A_TOKEN_FILE": "/home/caozuohua/.config/hermes-a2a-bridge.env",
 }
 ENV = build_safe_env(user_env)

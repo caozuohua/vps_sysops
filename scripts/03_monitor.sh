@@ -12,7 +12,7 @@ usage() {
 用法: bash scripts/03_monitor.sh
 
 可选环境变量:
-  VPS_PROFILE=gcp|azure   显式选择主机配置（已知主机会按 hostname 自动选择）
+  VPS_PROFILE=gcp|azure|aws   显式选择主机配置（已知主机会按 hostname 自动选择）
 
 系统监控/健康检查，可加入 cron 定时执行
 
@@ -79,6 +79,15 @@ for svc in ${MONITOR_SERVICES}; do
     ALERTS+=("服务异常: ${unit} 未运行（system / ${MONITOR_USER:-current user} user 均未激活）")
   fi
 done
+
+# Mem0 API/Dashboard 确定性健康检查；不写入业务记忆，也不依赖 LLM。
+if [[ "${MEM0_MONITOR_ENABLED:-true}" == "true" ]]; then
+  MEM0_HEALTH_OUTPUT=""
+  if ! MEM0_HEALTH_OUTPUT="$(bash "${SCRIPT_DIR}/mem0.sh" health 2>&1)"; then
+    MEM0_HEALTH_SUMMARY="$(printf '%s\n' "${MEM0_HEALTH_OUTPUT}" | tail -1)"
+    ALERTS+=("Mem0 健康检查失败: ${MEM0_HEALTH_SUMMARY}")
+  fi
+fi
 
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 STATUS_LINE="[$TIMESTAMP] ${HOSTNAME_STR} | CPU:${CPU_PCT}% MEM:${MEM_PCT}% DISK:${DISK_PCT}%"
